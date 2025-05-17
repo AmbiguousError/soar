@@ -59,8 +59,8 @@ COLOR_MOUNTAIN_BASE = (200, 200, 180)
 COLOR_SAND = (245, 222, 179)
 
 # Glider Colors
-GLIDER_BODY_COLOR = (80, 80, 220)
-GLIDER_WING_COLOR = (120, 120, 255)
+GLIDER_BODY_COLOR = (100, 100, 230) # Slightly lighter body
+GLIDER_WING_COLOR = (150, 150, 255) # Slightly lighter wings
 
 THERMAL_COLOR_PRIMARY = (255, 150, 150, 100)
 THERMAL_COLOR_ACCENT = (255, 255, 255, 120)
@@ -85,37 +85,51 @@ class Glider(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         
-        glider_surface_width = 60 
-        glider_surface_height = 30 
-        self.original_image = pygame.Surface([glider_surface_width, glider_surface_height], pygame.SRCALPHA)
+        # Define visual characteristics of the glider
+        # The glider is drawn on its original_image surface with its nose pointing RIGHT (positive X).
+        # The original_image's width will be the fuselage_length.
+        # The original_image's height will be the wing_span.
+        
+        self.fuselage_length = 45  # Visual length of the glider's body
+        fuselage_thickness = 4     # Visual thickness of the body
+        wing_span = 70             # Visual total wingspan (tip to tip)
+        wing_chord = 5             # Visual wing depth (front to back)
+        
+        tail_plane_span = 18       # Span of the horizontal tail stabilizer
+        tail_plane_chord = 4       # Chord of the horizontal tail stabilizer
+        tail_fin_height = 8        # Height of the vertical tail fin
 
-        self.fuselage_length = 45 # Store as instance attribute
-        fuselage_thickness = 5 
-        wing_span = 60 
-        wing_chord = 6 
-        tail_plane_span = 18
-        tail_plane_chord = 5
-        tail_fin_height = 8
-        
-        fuselage_y_top = (glider_surface_height - fuselage_thickness) / 2
-        
-        fuselage_rect = pygame.Rect(glider_surface_width - self.fuselage_length, fuselage_y_top, self.fuselage_length, fuselage_thickness)
+        # Create the surface for the glider's original image
+        # Width of surface = fuselage_length, Height of surface = wing_span
+        canvas_width = self.fuselage_length
+        canvas_height = wing_span
+        self.original_image = pygame.Surface([canvas_width, canvas_height], pygame.SRCALPHA)
+
+        # 1. Draw Fuselage (runs horizontally along the center of the canvas)
+        # Nose is at x = canvas_width, Tail is at x = 0
+        fuselage_y_top = (canvas_height - fuselage_thickness) / 2
+        fuselage_rect = pygame.Rect(0, fuselage_y_top, self.fuselage_length, fuselage_thickness)
         pygame.draw.rect(self.original_image, GLIDER_BODY_COLOR, fuselage_rect)
-        
-        wing_leading_edge_x = glider_surface_width - self.fuselage_length + (self.fuselage_length * 0.35) 
-        
-        pygame.draw.rect(self.original_image, GLIDER_WING_COLOR, 
-                         (wing_leading_edge_x, (glider_surface_height - wing_span)/2 , wing_chord, wing_span))
 
-        tail_plane_leading_edge_x = glider_surface_width - self.fuselage_length 
-        pygame.draw.rect(self.original_image, GLIDER_WING_COLOR,
-                         (tail_plane_leading_edge_x, (glider_surface_height - tail_plane_span)/2, tail_plane_chord, tail_plane_span))
+        # 2. Draw Main Wings (runs vertically across the fuselage)
+        # Position the leading edge of the wing along the fuselage.
+        # (e.g., 65% from the tail, or 35% from the nose)
+        wing_leading_edge_x_from_tail = self.fuselage_length * 0.65 
+        wing_rect = pygame.Rect(wing_leading_edge_x_from_tail, 0, wing_chord, wing_span)
+        pygame.draw.rect(self.original_image, GLIDER_WING_COLOR, wing_rect)
 
-        fin_base_y = fuselage_y_top
-        fin_tip_y = fuselage_y_top - tail_fin_height
-        fin_base_start_x = tail_plane_leading_edge_x + tail_plane_chord 
-        fin_base_end_x = tail_plane_leading_edge_x + tail_plane_chord + (fuselage_thickness * 1.5) 
-        fin_tip_x = tail_plane_leading_edge_x + tail_plane_chord + (fuselage_thickness * 0.75)
+        # 3. Draw Tail Plane (Horizontal Stabilizer - at the tail, x=0)
+        tail_plane_y_top = (canvas_height - tail_plane_span) / 2
+        tail_plane_rect = pygame.Rect(0, tail_plane_y_top, tail_plane_chord, tail_plane_span)
+        pygame.draw.rect(self.original_image, GLIDER_WING_COLOR, tail_plane_rect)
+
+        # 4. Draw Tail Fin (Vertical Stabilizer - on top of the fuselage at the tail)
+        fin_base_y = fuselage_y_top  # Top of the fuselage
+        fin_tip_y = fin_base_y - tail_fin_height
+        fin_base_start_x = 0 # Start at the very tail
+        fin_base_end_x = tail_plane_chord # Give it a small base width
+        fin_tip_x = (fin_base_start_x + fin_base_end_x) / 2
+        
         pygame.draw.polygon(self.original_image, GLIDER_BODY_COLOR, 
                             [(fin_base_start_x, fin_base_y), 
                              (fin_base_end_x, fin_base_y), 
@@ -129,8 +143,6 @@ class Glider(pygame.sprite.Sprite):
         self.height = INITIAL_HEIGHT; self.speed = INITIAL_SPEED
         
         self.trail_points = []; self.contrail_frame_counter = 0
-        # self.glider_length is the surface width, used for rect calculations primarily
-        self.glider_length = glider_surface_width 
         self.in_thermal_lift = 0
 
     def reset(self):
@@ -181,8 +193,11 @@ class Glider(pygame.sprite.Sprite):
         self.contrail_frame_counter +=1
         if self.contrail_frame_counter >= CONTRAIL_POINT_DELAY:
             self.contrail_frame_counter = 0
-            # Use self.fuselage_length here
-            effective_tail_offset = (self.fuselage_length / 2) - 5 
+            # Contrail from the center-rear of the fuselage.
+            # self.fuselage_length is the total length. Tail is at x=0 of original_image.
+            # We want the offset from the center of the *rotated* image to the tail point.
+            # The visual center of the fuselage (along its length) is self.fuselage_length / 2 from its tail.
+            effective_tail_offset = (self.fuselage_length / 2) - 2 # Offset from center of fuselage to its tail, minus a bit to be inside
             
             tail_offset_x = - effective_tail_offset * math.cos(heading_rad)
             tail_offset_y = - effective_tail_offset * math.sin(heading_rad)
