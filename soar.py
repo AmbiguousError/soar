@@ -129,7 +129,7 @@ PASTEL_CLOUD = (235, 240, 245)
 PASTEL_HUD_PANEL = (190, 200, 210, 180) 
 PASTEL_MINIMAP_BACKGROUND = (170, 180, 190, MINIMAP_ALPHA)
 PASTEL_MINIMAP_BORDER = (140, 150, 160)
-PASTEL_MARKER_COLOR = (255, 100, 100) # Bright for visibility
+PASTEL_MARKER_COLOR = (255, 100, 100) 
 PASTEL_ACTIVE_MARKER_COLOR = (100, 255, 100)
 
 PASTEL_WATER_DEEP = (190, 220, 240)    
@@ -157,7 +157,7 @@ PASTEL_VSI_SINK = (255, 170, 170)
 PASTEL_TEXT_COLOR_HUD = (70, 70, 80) 
 PASTEL_CONTRAIL_COLOR = PASTEL_TEXT_COLOR_HUD 
 
-MAP_TILE_OUTLINE_COLOR = (170, 175, 185) 
+MAP_TILE_OUTLINE_COLOR = (215, 220, 225) # Made this lighter for fainter lines
 
 
 # --- Land Types ---
@@ -366,13 +366,10 @@ class RaceMarker(pygame.sprite.Sprite):
         self.world_radius = RACE_MARKER_RADIUS_WORLD  # For collision detection
         self.visual_radius = RACE_MARKER_VISUAL_RADIUS_WORLD # For drawing in world
         
-        # Create a base image (simple circle for now)
-        # This image will be blitted directly, its rect updated based on world_pos and camera
         self.image = pygame.Surface((self.visual_radius * 2, self.visual_radius * 2), pygame.SRCALPHA)
         pygame.draw.circle(self.image, PASTEL_MARKER_COLOR, (self.visual_radius, self.visual_radius), self.visual_radius)
-        pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), self.visual_radius - 3) # Inner circle
+        pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), self.visual_radius - 3) 
         
-        # Add marker number text to the image
         font = pygame.font.Font(None, int(self.visual_radius * 1.2))
         text_surf = font.render(str(self.number), True, PASTEL_BLACK)
         text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
@@ -381,16 +378,14 @@ class RaceMarker(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
 
     def update(self, cam_x, cam_y, is_active):
-        # Update screen position
         self.rect.centerx = self.world_pos.x - cam_x
         self.rect.centery = self.world_pos.y - cam_y
         
-        # Update visual if it's the active marker
         color_to_use = PASTEL_ACTIVE_MARKER_COLOR if is_active else PASTEL_MARKER_COLOR
-        self.image.fill((0,0,0,0)) # Clear
+        self.image.fill((0,0,0,0)) 
         pygame.draw.circle(self.image, color_to_use, (self.visual_radius, self.visual_radius), self.visual_radius)
         pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), self.visual_radius - 3)
-        font = pygame.font.Font(None, int(self.visual_radius * 1.2)) # Re-render text in case color changes logic implemented later
+        font = pygame.font.Font(None, int(self.visual_radius * 1.2)) 
         text_surf = font.render(str(self.number), True, PASTEL_BLACK)
         text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
         self.image.blit(text_surf, text_rect)
@@ -404,47 +399,32 @@ class Minimap:
         self.margin = margin
         self.surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         self.rect = self.surface.get_rect(topright=(SCREEN_WIDTH - self.margin, self.margin + HUD_HEIGHT))
-        self.world_bounds_view_radius = 3000 # How much of the world the minimap tries to show around player
+        self.world_bounds_view_radius = 3000 
 
     def world_to_minimap(self, world_x, world_y, player_world_x, player_world_y):
-        # Center minimap on player, scale world to minimap
         scale_x = self.width / (2 * self.world_bounds_view_radius)
         scale_y = self.height / (2 * self.world_bounds_view_radius)
-        
-        # Relative position of point to player
         rel_x = world_x - player_world_x
         rel_y = world_y - player_world_y
-        
-        # Scale and offset to minimap center
         mini_x = self.width / 2 + rel_x * scale_x
         mini_y = self.height / 2 + rel_y * scale_y
-        
         return int(mini_x), int(mini_y)
 
     def draw(self, surface, player_glider, course_markers):
-        self.surface.fill(PASTEL_MINIMAP_BACKGROUND) # Semi-transparent background
-        
-        # Draw player
-        player_mini_x, player_mini_y = self.width // 2, self.height // 2 # Player is always center
+        self.surface.fill(PASTEL_MINIMAP_BACKGROUND) 
+        player_mini_x, player_mini_y = self.width // 2, self.height // 2 
         pygame.draw.circle(self.surface, PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
         
-        # Draw race markers
         for i, marker in enumerate(course_markers):
             mini_x, mini_y = self.world_to_minimap(marker.world_pos.x, marker.world_pos.y, player_glider.world_x, player_glider.world_y)
-            
-            # Clamp to minimap bounds if needed (optional, can look weird if markers fly off)
-            # mini_x = max(0, min(self.width, mini_x))
-            # mini_y = max(0, min(self.height, mini_y))
-
             color = PASTEL_ACTIVE_MARKER_COLOR if i == player_glider.current_target_marker_index else PASTEL_MARKER_COLOR
             pygame.draw.circle(self.surface, color, (mini_x, mini_y), RACE_MARKER_VISUAL_RADIUS_MAP)
-            # Draw number on minimap marker
             font = pygame.font.Font(None, 18)
             text_surf = font.render(str(marker.number), True, PASTEL_BLACK)
             text_rect = text_surf.get_rect(center=(mini_x, mini_y))
             self.surface.blit(text_surf, text_rect)
 
-        pygame.draw.rect(self.surface, PASTEL_MINIMAP_BORDER, self.surface.get_rect(), 2) # Border
+        pygame.draw.rect(self.surface, PASTEL_MINIMAP_BORDER, self.surface.get_rect(), 2) 
         surface.blit(self.surface, self.rect)
 
 
@@ -628,17 +608,17 @@ clock = pygame.time.Clock()
 
 # --- Game Objects & Variables ---
 player = Glider()
-all_world_sprites = pygame.sprite.Group() # Will hold thermals and race markers
+all_world_sprites = pygame.sprite.Group() 
 thermals_group = pygame.sprite.Group()    
-race_markers_group = pygame.sprite.Group() # For race markers specifically
+race_markers_group = pygame.sprite.Group() 
 foreground_clouds_group = pygame.sprite.Group() 
 game_state = STATE_START_SCREEN 
 current_level = 1; level_timer_start_ticks = 0; time_taken_for_level = 0
 current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE
 thermal_spawn_timer = 0; final_score = 0
 selected_difficulty_option = 0 
-selected_mode_option = 0 # For Free Fly / Race
-selected_laps_option = 1 # Default to 3 laps (index 1 for [1,3,5])
+selected_mode_option = 0 
+selected_laps_option = 1 
 lap_options = [1, 3, 5]
 
 minimap = Minimap(MINIMAP_WIDTH, MINIMAP_HEIGHT, MINIMAP_MARGIN)
@@ -648,14 +628,11 @@ def generate_race_course(num_markers=8, course_radius=1500):
     global race_course_markers, race_markers_group, all_world_sprites
     race_course_markers.clear()
     race_markers_group.empty()
-    # Remove old markers from all_world_sprites if they were added
     for sprite in all_world_sprites:
         if isinstance(sprite, RaceMarker):
             sprite.kill()
 
-    # Center the course around a point slightly offset by map offsets to vary its absolute position
-    # but keep its relative shape.
-    center_x = current_map_offset_x * TILE_SIZE * 0.1 # Just an example offset
+    center_x = current_map_offset_x * TILE_SIZE * 0.1 
     center_y = current_map_offset_y * TILE_SIZE * 0.1
 
     for i in range(num_markers):
@@ -665,7 +642,7 @@ def generate_race_course(num_markers=8, course_radius=1500):
         marker = RaceMarker(world_x, world_y, i + 1)
         race_course_markers.append(marker)
         race_markers_group.add(marker)
-        all_world_sprites.add(marker) # Add to main drawing group
+        all_world_sprites.add(marker) 
 
 
 def generate_new_wind():
@@ -675,11 +652,11 @@ def generate_new_wind():
     current_wind_speed_x = wind_strength * math.cos(wind_angle_rad)
     current_wind_speed_y = wind_strength * math.sin(wind_angle_rad)
 
-def start_new_level(level_num_or_laps): # Parameter meaning depends on mode
+def start_new_level(level_num_or_laps): 
     global current_level,level_timer_start_ticks,current_thermal_spawn_rate,thermal_spawn_timer, game_state
     global current_map_offset_x, current_map_offset_y, _river_param_random, total_race_laps
     
-    level_timer_start_ticks=pygame.time.get_ticks() # Start timer for level/race
+    level_timer_start_ticks=pygame.time.get_ticks() 
     
     current_map_offset_x = random.randint(-200000, 200000) 
     current_map_offset_y = random.randint(-200000, 200000)
@@ -689,17 +666,17 @@ def start_new_level(level_num_or_laps): # Parameter meaning depends on mode
     generate_new_wind()
     
     thermals_group.empty()
-    all_world_sprites.empty() # Clear all world sprites (thermals, old markers)
+    all_world_sprites.empty() 
     race_markers_group.empty()
     race_course_markers.clear()
 
     foreground_clouds_group.empty()
     for i in range(NUM_FOREGROUND_CLOUDS): foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
     
-    player.reset(start_height=INITIAL_HEIGHT) # Reset player for new level/race
+    player.reset(start_height=INITIAL_HEIGHT) 
 
     if current_game_mode == MODE_FREE_FLY:
-        current_level = level_num_or_laps # This is the actual level number
+        current_level = level_num_or_laps 
         current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE + (THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL * (current_level -1))
         if game_difficulty == DIFFICULTY_NOOB:
             current_thermal_spawn_rate = max(20, current_thermal_spawn_rate // 2) 
@@ -709,11 +686,9 @@ def start_new_level(level_num_or_laps): # Parameter meaning depends on mode
         game_state = STATE_PLAYING_FREE_FLY
     
     elif current_game_mode == MODE_RACE:
-        total_race_laps = level_num_or_laps # This is the number of laps
-        generate_race_course() # Generate markers for the race
-        # Thermals can optionally be disabled or reduced in race mode if desired
-        # For now, they will spawn as per normal difficulty settings if not explicitly handled
-        current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE # Or some fixed value for races
+        total_race_laps = level_num_or_laps 
+        generate_race_course() 
+        current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE 
         if game_difficulty == DIFFICULTY_NOOB: current_thermal_spawn_rate = max(20, current_thermal_spawn_rate // 2) 
         thermal_spawn_timer=0
         game_state = STATE_RACE_PLAYING
@@ -729,7 +704,7 @@ def reset_to_main_menu():
     current_level=1; final_score=0; 
     selected_difficulty_option = 0 
     selected_mode_option = 0
-    selected_laps_option = 1 # Default to 3 laps index
+    selected_laps_option = 1 
     game_state = STATE_START_SCREEN
 
 # --- Screen Drawing Functions ---
@@ -799,7 +774,8 @@ def draw_race_complete_screen(surface, total_time_seconds):
 
 def draw_game_over_screen_content(surface, score, level):
     surface.fill(PASTEL_DARK_GRAY); draw_text(surface, "GAME OVER", 72, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, PASTEL_RED, center=True, shadow=True, shadow_color=PASTEL_BLACK)
-    draw_text(surface, f"Reached Level: {level}", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2-30, PASTEL_WHITE, center=True) # Only for Free Fly
+    if current_game_mode == MODE_FREE_FLY: # Only show level for free fly
+        draw_text(surface, f"Reached Level: {level}", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2-30, PASTEL_WHITE, center=True)
     draw_text(surface, f"Final Height: {int(score)}m", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2+10, PASTEL_WHITE, center=True)
     draw_text(surface, "Press ENTER for Menu", 32, SCREEN_WIDTH//2, SCREEN_HEIGHT*2//3, PASTEL_LIGHT_GRAY, center=True)
 
@@ -813,7 +789,7 @@ def draw_height_indicator_hud(surface, current_player_height, target_h, vertical
     pygame.draw.line(surface, PASTEL_INDICATOR_GROUND, (indicator_x_pos-5, indicator_y_pos+indicator_bar_height), (indicator_x_pos+INDICATOR_WIDTH+5, indicator_y_pos+indicator_bar_height), 3)
     draw_text(surface, "0m", 14, indicator_x_pos+INDICATOR_WIDTH+8, indicator_y_pos+indicator_bar_height-7, PASTEL_TEXT_COLOR_HUD) 
     target_marker_y_on_bar = indicator_y_pos
-    if target_h > 0 and current_game_mode == MODE_FREE_FLY : # Only show target for free fly
+    if target_h > 0 and current_game_mode == MODE_FREE_FLY : 
         target_ratio = min(target_h / max_indicator_height_value, 1.0)
         target_marker_y_on_bar = indicator_y_pos + indicator_bar_height * (1 - target_ratio)
         pygame.draw.line(surface, PASTEL_GREEN_TARGET, (indicator_x_pos-5, target_marker_y_on_bar), (indicator_x_pos+INDICATOR_WIDTH+5, target_marker_y_on_bar), 3)
@@ -878,29 +854,29 @@ while running:
                 elif event.key == pygame.K_DOWN: selected_difficulty_option = (selected_difficulty_option + 1) % 3 
                 elif event.key == pygame.K_RETURN:
                     game_difficulty = selected_difficulty_option 
-                    game_state = STATE_MODE_SELECT # Go to mode select
+                    game_state = STATE_MODE_SELECT 
             
             elif game_state == STATE_MODE_SELECT:
                 if event.key == pygame.K_UP or event.key == pygame.K_DOWN: selected_mode_option = 1 - selected_mode_option
                 elif event.key == pygame.K_RETURN:
                     current_game_mode = selected_mode_option
                     if current_game_mode == MODE_FREE_FLY:
-                        start_new_level(1) # Start free fly level 1
-                    else: # MODE_RACE
+                        start_new_level(1) 
+                    else: 
                         game_state = STATE_RACE_LAPS_SELECT
             
             elif game_state == STATE_RACE_LAPS_SELECT:
                 if event.key == pygame.K_UP: selected_laps_option = (selected_laps_option - 1 + len(lap_options)) % len(lap_options)
                 elif event.key == pygame.K_DOWN: selected_laps_option = (selected_laps_option + 1) % len(lap_options)
                 elif event.key == pygame.K_RETURN:
-                    start_new_level(lap_options[selected_laps_option]) # Pass selected laps
+                    start_new_level(lap_options[selected_laps_option]) 
 
-            elif game_state == STATE_PLAYING_FREE_FLY: # Changed from STATE_PLAYING
+            elif game_state == STATE_PLAYING_FREE_FLY: 
                 if event.key == pygame.K_ESCAPE: reset_to_main_menu() 
             
             elif game_state == STATE_TARGET_REACHED_OPTIONS:
                 if event.key == pygame.K_m: 
-                    start_new_level(current_level + 1) # For Free Fly
+                    start_new_level(current_level + 1) 
                 elif event.key == pygame.K_c: 
                     game_state = STATE_TARGET_REACHED_CONTINUE_PLAYING
             
@@ -910,14 +886,14 @@ while running:
 
             elif game_state == STATE_POST_GOAL_MENU:
                 if event.key == pygame.K_n: 
-                    start_new_level(current_level + 1) # For Free Fly
+                    start_new_level(current_level + 1) 
                 elif event.key == pygame.K_q: 
                     reset_to_main_menu()
                 elif event.key == pygame.K_r or event.key == pygame.K_ESCAPE : 
                     game_state = STATE_TARGET_REACHED_CONTINUE_PLAYING
             
             elif game_state == STATE_RACE_PLAYING:
-                 if event.key == pygame.K_ESCAPE: reset_to_main_menu() # Escape during race goes to main menu
+                 if event.key == pygame.K_ESCAPE: reset_to_main_menu() 
 
             elif game_state == STATE_RACE_COMPLETE:
                 if event.key == pygame.K_RETURN: reset_to_main_menu()
@@ -932,9 +908,8 @@ while running:
         camera_x = player.world_x - SCREEN_WIDTH // 2
         camera_y = player.world_y - SCREEN_HEIGHT // 2
         
-        # Update thermals (they exist in both modes for now)
-        for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
-        if game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_RACE_PLAYING : # Only spawn new thermals in active play
+        if game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_RACE_PLAYING : 
+            for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
             thermal_spawn_timer += 1
             if thermal_spawn_timer >= current_thermal_spawn_rate:
                 thermal_spawn_timer = 0
@@ -944,8 +919,9 @@ while running:
                 if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
                     new_thermal = Thermal((spawn_world_x, spawn_world_y))
                     all_world_sprites.add(new_thermal); thermals_group.add(new_thermal)
-        
-        # Update race markers if in race mode
+        else: 
+             for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
+
         if game_state == STATE_RACE_PLAYING:
             for i, marker in enumerate(race_course_markers):
                 marker.update(camera_x, camera_y, i == player.current_target_marker_index)
@@ -989,11 +965,10 @@ while running:
     elif game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING or game_state == STATE_RACE_PLAYING:
         draw_endless_map(screen, camera_x, camera_y)
         player.draw_contrail(screen, camera_x, camera_y)
-        all_world_sprites.draw(screen) # Thermals and Race Markers
+        all_world_sprites.draw(screen) 
         screen.blit(player.image, player.rect) 
         foreground_clouds_group.draw(screen) 
         
-        # HUD
         hud_surface = pygame.Surface((SCREEN_WIDTH, HUD_HEIGHT), pygame.SRCALPHA); hud_surface.fill(PASTEL_HUD_PANEL); screen.blit(hud_surface, (0,0))
         hud_margin = 10; line_spacing = 22; current_y_hud = hud_margin
 
@@ -1007,22 +982,7 @@ while running:
                 dist_to_marker = math.hypot(player.world_x - target_marker.world_pos.x, player.world_y - target_marker.world_pos.y)
                 draw_text(screen, f"Marker {target_marker.number}: {int(dist_to_marker/10)}m", 20, hud_margin + 150, current_y_hud, PASTEL_TEXT_COLOR_HUD)
                 
-                # Draw arrow to next marker
                 angle_to_marker = math.atan2(target_marker.world_pos.y - player.world_y, target_marker.world_pos.x - player.world_x)
-                arrow_len = 25
-                arrow_tip_x = player.rect.centerx + arrow_len * math.cos(angle_to_marker - math.radians(player.heading))
-                arrow_tip_y = player.rect.centery + arrow_len * math.sin(angle_to_marker - math.radians(player.heading))
-                #This arrow is relative to player's view, not fixed on HUD. For fixed HUD arrow, adjust calculation.
-                # For simplicity, let's draw it near the player sprite for now, pointing world direction
-                # Convert angle_to_marker to screen space (relative to player sprite, not heading based for now)
-                screen_angle_rad = angle_to_marker # This is world angle
-                arrow_hud_center_x = SCREEN_WIDTH // 2 + 50 # Offset from player center
-                arrow_hud_center_y = SCREEN_HEIGHT // 2
-                
-                # Draw a simple line from player center towards marker direction on screen
-                # This is a very basic directional cue on the main screen, not a fixed HUD arrow
-                # For a proper HUD arrow, you'd calculate its position on the HUD panel.
-                # Let's draw it near the minimap or another fixed HUD spot.
                 hud_arrow_x = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN - 30
                 hud_arrow_y = MINIMAP_MARGIN + HUD_HEIGHT + MINIMAP_HEIGHT // 2
                 pygame.draw.line(screen, PASTEL_ACTIVE_MARKER_COLOR, 
@@ -1034,7 +994,7 @@ while running:
         if game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_RACE_PLAYING:
             timer_seconds = (current_ticks - level_timer_start_ticks) / 1000.0
             draw_text(screen, f"Time: {timer_seconds:.1f}s", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
-        else: # Continue playing or race complete
+        else: 
             draw_text(screen, f"Time: {time_taken_for_level:.1f}s (Goal!)", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
 
         current_y_hud += line_spacing
@@ -1042,16 +1002,16 @@ while running:
         draw_text(screen, f"Speed: {player.speed:.1f}", 20, hud_margin + 120, current_y_hud, PASTEL_TEXT_COLOR_HUD)
         if player.speed < STALL_SPEED: draw_text(screen, "STALL!", 24, SCREEN_WIDTH//2, hud_margin + line_spacing//2, PASTEL_RED, center=True, shadow=True, shadow_color=PASTEL_BLACK)
         
-        wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"; wind_text_x_pos = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN * 2 - 180 # Adjusted for minimap
+        wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"; wind_text_x_pos = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN * 2 - 180 
         draw_text(screen, wind_display_text, 18, wind_text_x_pos, hud_margin + 5, PASTEL_TEXT_COLOR_HUD)
         
         esc_text = "ESC for Menu"
         if game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING: esc_text = "ESC for Options"
-        elif game_state == STATE_RACE_PLAYING : esc_text = "ESC for Menu" # Race playing escape
+        elif game_state == STATE_RACE_PLAYING : esc_text = "ESC for Menu" 
         draw_text(screen, esc_text, 18, wind_text_x_pos, hud_margin + 5 + line_spacing, PASTEL_TEXT_COLOR_HUD)
 
         draw_weather_vane(screen, current_wind_speed_x, current_wind_speed_y, wind_text_x_pos + 150, hud_margin + 25)
-        draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL if current_game_mode == MODE_FREE_FLY else player.height + 100, player.vertical_speed) # Target irrelevant for race HUD height bar
+        draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL if current_game_mode == MODE_FREE_FLY else player.height + 100, player.vertical_speed) 
 
         if current_game_mode == MODE_RACE:
             minimap.draw(screen, player, race_course_markers)
