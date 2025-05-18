@@ -3,8 +3,8 @@ import math
 import random
 
 # --- Constants ---
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1200 #800
+SCREEN_HEIGHT = 900 #600
 HUD_HEIGHT = 100 # Height of the top HUD panel
 
 # Glider Physics & Control
