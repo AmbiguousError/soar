@@ -60,9 +60,9 @@ current_map_offset_x = 0
 current_map_offset_y = 0 
 
 # Race Mode Specific
-RACE_MARKER_RADIUS_WORLD = 75 # World units for collision
-RACE_MARKER_VISUAL_RADIUS_MAP = 8 # Pixels on minimap
-RACE_MARKER_VISUAL_RADIUS_WORLD = 20 # Visual size in world
+RACE_MARKER_RADIUS_WORLD = 75 
+RACE_MARKER_VISUAL_RADIUS_MAP = 6 # Smaller on minimap
+RACE_MARKER_VISUAL_RADIUS_WORLD = 25 # Visual size in world
 DEFAULT_RACE_LAPS = 3
 race_course_markers = []
 total_race_laps = DEFAULT_RACE_LAPS
@@ -93,15 +93,15 @@ VSI_ARROW_SIZE = 8
 # --- Game States ---
 STATE_START_SCREEN = 0
 STATE_DIFFICULTY_SELECT = 1 
-STATE_MODE_SELECT = 2 # New: Choose Free Fly or Race
-STATE_PLAYING_FREE_FLY = 3 # Was STATE_PLAYING
-STATE_TARGET_REACHED_OPTIONS = 4 # Was STATE_LEVEL_COMPLETE
+STATE_MODE_SELECT = 2 
+STATE_PLAYING_FREE_FLY = 3 
+STATE_TARGET_REACHED_OPTIONS = 4 
 STATE_TARGET_REACHED_CONTINUE_PLAYING = 5 
 STATE_POST_GOAL_MENU = 6 
-STATE_RACE_LAPS_SELECT = 7 # New
-STATE_RACE_PLAYING = 8 # New
-STATE_RACE_COMPLETE = 9 # New
-STATE_GAME_OVER = 10 # Shifted
+STATE_RACE_LAPS_SELECT = 7 
+STATE_RACE_PLAYING = 8 
+STATE_RACE_COMPLETE = 9 
+STATE_GAME_OVER = 10 
 
 # --- Game Difficulty ---
 DIFFICULTY_NOOB = 0    
@@ -129,8 +129,8 @@ PASTEL_CLOUD = (235, 240, 245)
 PASTEL_HUD_PANEL = (190, 200, 210, 180) 
 PASTEL_MINIMAP_BACKGROUND = (170, 180, 190, MINIMAP_ALPHA)
 PASTEL_MINIMAP_BORDER = (140, 150, 160)
-PASTEL_MARKER_COLOR = (255, 100, 100) 
-PASTEL_ACTIVE_MARKER_COLOR = (100, 255, 100)
+PASTEL_MARKER_COLOR = (255, 170, 170) # Softer pastel red for non-active markers
+PASTEL_ACTIVE_MARKER_COLOR = (173, 255, 173) # Pastel Green for active marker
 
 PASTEL_WATER_DEEP = (190, 220, 240)    
 PASTEL_WATER_SHALLOW = (210, 235, 250) 
@@ -157,7 +157,7 @@ PASTEL_VSI_SINK = (255, 170, 170)
 PASTEL_TEXT_COLOR_HUD = (70, 70, 80) 
 PASTEL_CONTRAIL_COLOR = PASTEL_TEXT_COLOR_HUD 
 
-MAP_TILE_OUTLINE_COLOR = (215, 220, 225) # Made this lighter for fainter lines
+MAP_TILE_OUTLINE_COLOR = (215, 220, 225) 
 
 
 # --- Land Types ---
@@ -207,14 +207,13 @@ class Glider(pygame.sprite.Sprite):
         pygame.draw.polygon(self.original_image, PASTEL_GLIDER_BODY, [(fin_base_start_x, fin_base_y), (fin_base_end_x, fin_base_y), (fin_tip_x, fin_tip_y)])
         self.image = self.original_image
         self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
-        self.radius = min(self.rect.width, self.rect.height) / 3 # For thermal collision
+        self.radius = min(self.rect.width, self.rect.height) / 3 
         self.world_x = 0.0; self.world_y = 0.0
         self.heading = 0; self.bank_angle = 0
         self.height = INITIAL_HEIGHT; self.speed = INITIAL_SPEED
         self.previous_height = INITIAL_HEIGHT 
         self.vertical_speed = 0.0 
         self.trail_points = []; self.contrail_frame_counter = 0
-        # Race specific attributes
         self.current_target_marker_index = 0
         self.laps_completed = 0
 
@@ -278,11 +277,10 @@ class Glider(pygame.sprite.Sprite):
             self.trail_points.append((contrail_world_x, contrail_world_y))
             if len(self.trail_points) > CONTRAIL_LENGTH: self.trail_points.pop(0)
 
-        # Race Marker Logic
         if game_state == STATE_RACE_PLAYING and race_course_markers:
             target_marker = race_course_markers[self.current_target_marker_index]
             dist_to_marker = math.hypot(self.world_x - target_marker.world_pos.x, self.world_y - target_marker.world_pos.y)
-            if dist_to_marker < target_marker.world_radius: # Passed the marker
+            if dist_to_marker < target_marker.world_radius: 
                 self.current_target_marker_index += 1
                 if self.current_target_marker_index >= len(race_course_markers):
                     self.laps_completed += 1
@@ -290,7 +288,7 @@ class Glider(pygame.sprite.Sprite):
                     if self.laps_completed >= total_race_laps:
                         game_state = STATE_RACE_COMPLETE
                         race_end_ticks = pygame.time.get_ticks()
-                        time_taken_for_level = (race_end_ticks - level_timer_start_ticks) / 1000.0 # Re-use for race time
+                        time_taken_for_level = (race_end_ticks - level_timer_start_ticks) / 1000.0 
 
     def apply_lift_from_thermal(self, thermal_lift_power_at_nominal_speed):
         global game_difficulty
@@ -363,32 +361,33 @@ class RaceMarker(pygame.sprite.Sprite):
         super().__init__()
         self.world_pos = pygame.math.Vector2(world_x, world_y)
         self.number = number
-        self.world_radius = RACE_MARKER_RADIUS_WORLD  # For collision detection
-        self.visual_radius = RACE_MARKER_VISUAL_RADIUS_WORLD # For drawing in world
+        self.world_radius = RACE_MARKER_RADIUS_WORLD  
+        self.visual_radius = RACE_MARKER_VISUAL_RADIUS_WORLD 
         
         self.image = pygame.Surface((self.visual_radius * 2, self.visual_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, PASTEL_MARKER_COLOR, (self.visual_radius, self.visual_radius), self.visual_radius)
-        pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), self.visual_radius - 3) 
+        # Initial draw, will be updated in update method based on active status
+        self.rect = self.image.get_rect()
+        self._draw_marker_image(False) # Initial draw as non-active
+
+    def _draw_marker_image(self, is_active):
+        color_to_use = PASTEL_ACTIVE_MARKER_COLOR if is_active else PASTEL_MARKER_COLOR
+        # Make marker 1 (start/finish) always a bit distinct if it's the active one
+        if is_active and self.number == 1:
+            color_to_use = PASTEL_GOLD # Gold for active start/finish
+
+        self.image.fill((0,0,0,0)) 
+        pygame.draw.circle(self.image, color_to_use, (self.visual_radius, self.visual_radius), self.visual_radius)
+        pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), int(self.visual_radius * 0.7)) # Inner circle
         
-        font = pygame.font.Font(None, int(self.visual_radius * 1.2))
+        font = pygame.font.Font(None, int(self.visual_radius * 1.1)) 
         text_surf = font.render(str(self.number), True, PASTEL_BLACK)
         text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
         self.image.blit(text_surf, text_rect)
-        
-        self.rect = self.image.get_rect()
 
     def update(self, cam_x, cam_y, is_active):
         self.rect.centerx = self.world_pos.x - cam_x
         self.rect.centery = self.world_pos.y - cam_y
-        
-        color_to_use = PASTEL_ACTIVE_MARKER_COLOR if is_active else PASTEL_MARKER_COLOR
-        self.image.fill((0,0,0,0)) 
-        pygame.draw.circle(self.image, color_to_use, (self.visual_radius, self.visual_radius), self.visual_radius)
-        pygame.draw.circle(self.image, PASTEL_WHITE, (self.visual_radius, self.visual_radius), self.visual_radius - 3)
-        font = pygame.font.Font(None, int(self.visual_radius * 1.2)) 
-        text_surf = font.render(str(self.number), True, PASTEL_BLACK)
-        text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
-        self.image.blit(text_surf, text_rect)
+        self._draw_marker_image(is_active)
 
 
 # --- Minimap Class ---
@@ -417,9 +416,13 @@ class Minimap:
         
         for i, marker in enumerate(course_markers):
             mini_x, mini_y = self.world_to_minimap(marker.world_pos.x, marker.world_pos.y, player_glider.world_x, player_glider.world_y)
+            
             color = PASTEL_ACTIVE_MARKER_COLOR if i == player_glider.current_target_marker_index else PASTEL_MARKER_COLOR
+            if i == player_glider.current_target_marker_index and marker.number == 1: # Special color for active start/finish
+                color = PASTEL_GOLD
+
             pygame.draw.circle(self.surface, color, (mini_x, mini_y), RACE_MARKER_VISUAL_RADIUS_MAP)
-            font = pygame.font.Font(None, 18)
+            font = pygame.font.Font(None, 16) # Slightly smaller for minimap numbers
             text_surf = font.render(str(marker.number), True, PASTEL_BLACK)
             text_rect = text_surf.get_rect(center=(mini_x, mini_y))
             self.surface.blit(text_surf, text_rect)
@@ -628,12 +631,14 @@ def generate_race_course(num_markers=8, course_radius=1500):
     global race_course_markers, race_markers_group, all_world_sprites
     race_course_markers.clear()
     race_markers_group.empty()
-    for sprite in all_world_sprites:
+    for sprite in all_world_sprites: # Remove only old RaceMarker instances
         if isinstance(sprite, RaceMarker):
             sprite.kill()
 
-    center_x = current_map_offset_x * TILE_SIZE * 0.1 
-    center_y = current_map_offset_y * TILE_SIZE * 0.1
+    # Race course is generated around world origin (0,0)
+    # The visual map underneath will shift due to current_map_offset_x/y
+    center_x = 0 
+    center_y = 0
 
     for i in range(num_markers):
         angle = (i / num_markers) * 2 * math.pi
@@ -641,8 +646,8 @@ def generate_race_course(num_markers=8, course_radius=1500):
         world_y = center_y + course_radius * math.sin(angle)
         marker = RaceMarker(world_x, world_y, i + 1)
         race_course_markers.append(marker)
-        race_markers_group.add(marker)
-        all_world_sprites.add(marker) 
+        race_markers_group.add(marker) # Keep a specific group for markers if needed for logic
+        all_world_sprites.add(marker) # Add to main drawing group
 
 
 def generate_new_wind():
@@ -666,9 +671,11 @@ def start_new_level(level_num_or_laps):
     generate_new_wind()
     
     thermals_group.empty()
+    # Clear only relevant sprites from all_world_sprites, or clear all and re-add player
     all_world_sprites.empty() 
-    race_markers_group.empty()
+    race_markers_group.empty() # Also clear specific race marker group
     race_course_markers.clear()
+
 
     foreground_clouds_group.empty()
     for i in range(NUM_FOREGROUND_CLOUDS): foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
@@ -774,7 +781,7 @@ def draw_race_complete_screen(surface, total_time_seconds):
 
 def draw_game_over_screen_content(surface, score, level):
     surface.fill(PASTEL_DARK_GRAY); draw_text(surface, "GAME OVER", 72, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, PASTEL_RED, center=True, shadow=True, shadow_color=PASTEL_BLACK)
-    if current_game_mode == MODE_FREE_FLY: # Only show level for free fly
+    if current_game_mode == MODE_FREE_FLY: 
         draw_text(surface, f"Reached Level: {level}", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2-30, PASTEL_WHITE, center=True)
     draw_text(surface, f"Final Height: {int(score)}m", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2+10, PASTEL_WHITE, center=True)
     draw_text(surface, "Press ENTER for Menu", 32, SCREEN_WIDTH//2, SCREEN_HEIGHT*2//3, PASTEL_LIGHT_GRAY, center=True)
@@ -977,17 +984,31 @@ while running:
             draw_text(screen, f"Target: {TARGET_HEIGHT_PER_LEVEL}m", 20, hud_margin + 120, current_y_hud, PASTEL_TEXT_COLOR_HUD)
         elif current_game_mode == MODE_RACE:
             draw_text(screen, f"Lap: {min(player.laps_completed + 1, total_race_laps)} / {total_race_laps}", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
-            if race_course_markers and player.current_target_marker_index < len(race_course_markers) :
+            if race_course_markers and player.current_target_marker_index < len(race_course_markers) and game_state == STATE_RACE_PLAYING :
                 target_marker = race_course_markers[player.current_target_marker_index]
                 dist_to_marker = math.hypot(player.world_x - target_marker.world_pos.x, player.world_y - target_marker.world_pos.y)
                 draw_text(screen, f"Marker {target_marker.number}: {int(dist_to_marker/10)}m", 20, hud_margin + 150, current_y_hud, PASTEL_TEXT_COLOR_HUD)
                 
-                angle_to_marker = math.atan2(target_marker.world_pos.y - player.world_y, target_marker.world_pos.x - player.world_x)
-                hud_arrow_x = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN - 30
-                hud_arrow_y = MINIMAP_MARGIN + HUD_HEIGHT + MINIMAP_HEIGHT // 2
-                pygame.draw.line(screen, PASTEL_ACTIVE_MARKER_COLOR, 
-                                 (hud_arrow_x, hud_arrow_y), 
-                                 (hud_arrow_x + 20 * math.cos(angle_to_marker), hud_arrow_y + 20 * math.sin(angle_to_marker)), 3)
+                # Improved HUD Arrow
+                marker_screen_x = target_marker.world_pos.x - camera_x
+                marker_screen_y = target_marker.world_pos.y - camera_y
+                
+                hud_arrow_base_x = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN - 40 
+                hud_arrow_base_y = MINIMAP_MARGIN + HUD_HEIGHT + MINIMAP_HEIGHT // 2
+                
+                angle_to_marker_screen = math.atan2(marker_screen_y - hud_arrow_base_y, marker_screen_x - hud_arrow_base_x)
+                
+                arrow_len = 15
+                tip_x = hud_arrow_base_x + arrow_len * math.cos(angle_to_marker_screen)
+                tip_y = hud_arrow_base_y + arrow_len * math.sin(angle_to_marker_screen)
+                
+                # Arrow points (triangle)
+                p1 = (tip_x, tip_y)
+                p2 = (tip_x - arrow_len * 0.5 * math.cos(angle_to_marker_screen + math.pi / 6), 
+                      tip_y - arrow_len * 0.5 * math.sin(angle_to_marker_screen + math.pi / 6))
+                p3 = (tip_x - arrow_len * 0.5 * math.cos(angle_to_marker_screen - math.pi / 6),
+                      tip_y - arrow_len * 0.5 * math.sin(angle_to_marker_screen - math.pi / 6))
+                pygame.draw.polygon(screen, PASTEL_ACTIVE_MARKER_COLOR, [p1,p2,p3])
 
 
         current_y_hud += line_spacing
@@ -1013,7 +1034,7 @@ while running:
         draw_weather_vane(screen, current_wind_speed_x, current_wind_speed_y, wind_text_x_pos + 150, hud_margin + 25)
         draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL if current_game_mode == MODE_FREE_FLY else player.height + 100, player.vertical_speed) 
 
-        if current_game_mode == MODE_RACE:
+        if current_game_mode == MODE_RACE and (game_state == STATE_RACE_PLAYING or game_state == STATE_RACE_COMPLETE): # Show minimap in race and on race complete
             minimap.draw(screen, player, race_course_markers)
     
     elif game_state == STATE_GAME_OVER:
