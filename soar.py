@@ -46,17 +46,17 @@ MAX_THERMAL_LIFT_POWER = 0.55
 
 # Map
 TILE_SIZE = 40
-GAME_WORLD_Y_OFFSET = 0 # Map and game world start at y=0, HUD overlays
+GAME_WORLD_Y_OFFSET = 0
 MAP_GRID_WIDTH = SCREEN_WIDTH // TILE_SIZE
 MAP_GRID_HEIGHT = SCREEN_HEIGHT // TILE_SIZE
 
-
-# Wind
-WIND_SPEED_X = -0.5
-WIND_SPEED_Y = 0.05
+# Wind (will be global variables, initialized here)
+MAX_WIND_STRENGTH = 1.0 # Max speed of wind in pixels/frame
+current_wind_speed_x = 0.0
+current_wind_speed_y = 0.0
 
 # Clouds
-NUM_FOREGROUND_CLOUDS = 10
+NUM_FOREGROUND_CLOUDS = 12 # Slightly increased for better full-screen feel
 MIN_CLOUD_SPEED_FACTOR = 1.5
 MAX_CLOUD_SPEED_FACTOR = 2.5
 CLOUD_MIN_ALPHA = 40
@@ -66,6 +66,13 @@ CLOUD_MAX_ALPHA = 100
 TARGET_HEIGHT_PER_LEVEL = 1000
 START_HEIGHT_NEW_LEVEL = 250
 
+# Height Indicator
+INDICATOR_WIDTH = 20
+INDICATOR_X_MARGIN = 20
+INDICATOR_Y_MARGIN_FROM_HUD = 20
+INDICATOR_COLOR = (50, 50, 80)
+# Colors for indicator defined after main color block
+
 # --- Game States ---
 STATE_START_SCREEN = 0
 STATE_PLAYING = 1
@@ -73,14 +80,9 @@ STATE_GAME_OVER = 2
 STATE_LEVEL_COMPLETE = 3
 
 # --- Colors ---
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-DARK_GRAY = (64, 64, 64)
-GRAY = (150, 150, 150)
-LIGHT_GRAY = (200, 200, 200)
-RED = (255, 0, 0)
-GREEN = (0, 200, 0) # Defined before use in Height Indicator
-GOLD = (255, 215, 0)  # Defined before use in Height Indicator
+BLACK = (0, 0, 0); WHITE = (255, 255, 255); DARK_GRAY = (64, 64, 64)
+GRAY = (150, 150, 150); LIGHT_GRAY = (200, 200, 200); RED = (255, 0, 0)
+GREEN = (0, 200, 0); GOLD = (255, 215, 0)
 CLOUD_COLOR = (220, 220, 240)
 HUD_PANEL_COLOR = (30, 30, 50, 200)
 
@@ -93,13 +95,8 @@ GLIDER_BODY_COLOR = (100, 100, 230); GLIDER_WING_COLOR = (150, 150, 255)
 THERMAL_COLOR_PRIMARY_TUPLE = (255, 150, 150); THERMAL_COLOR_ACCENT_TUPLE = (255, 255, 255)
 THERMAL_BASE_ALPHA = 100; THERMAL_ACCENT_ALPHA = 120
 
-# Height Indicator Constants (defined AFTER colors)
-INDICATOR_WIDTH = 20
-INDICATOR_X_MARGIN = 20
-INDICATOR_Y_MARGIN_FROM_HUD = 20
-INDICATOR_COLOR = (50, 50, 80)
-INDICATOR_PLAYER_COLOR = GOLD # Now GOLD is defined
-INDICATOR_TARGET_COLOR = GREEN # Now GREEN is defined
+INDICATOR_PLAYER_COLOR = GOLD
+INDICATOR_TARGET_COLOR = GREEN
 INDICATOR_GROUND_COLOR = (100, 80, 60)
 
 
@@ -158,6 +155,8 @@ class Glider(pygame.sprite.Sprite):
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
 
     def update(self, keys):
+        global current_wind_speed_x, current_wind_speed_y # Access global wind
+
         if keys[pygame.K_UP]: self.speed += ACCELERATION
         elif keys[pygame.K_DOWN]:
             potential_new_speed = self.speed - ACCELERATION
@@ -177,8 +176,14 @@ class Glider(pygame.sprite.Sprite):
         self.heading = (self.heading + turn_rate_degrees) % 360
 
         heading_rad = math.radians(self.heading)
+        # Movement from player control
         self.x += self.speed * math.cos(heading_rad)
         self.y += self.speed * math.sin(heading_rad)
+        
+        # Apply wind effect
+        self.x += current_wind_speed_x
+        self.y += current_wind_speed_y
+
 
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
         self.rect = self.image.get_rect(center=(round(self.x), round(self.y)))
@@ -192,7 +197,7 @@ class Glider(pygame.sprite.Sprite):
             height_change_due_to_physics = max(net_vertical_force, -MINIMUM_SINK_RATE) if net_vertical_force < 0 else net_vertical_force
         self.height += height_change_due_to_physics
 
-        if height_change_due_to_physics < 0: # Only dive for speed if actually sinking from physics
+        if height_change_due_to_physics < 0:
             self.speed = min(self.speed + abs(height_change_due_to_physics) * DIVE_TO_SPEED_FACTOR, MAX_SPEED)
 
         self.contrail_frame_counter +=1
@@ -207,19 +212,18 @@ class Glider(pygame.sprite.Sprite):
         margin = max(self.rect.width, self.rect.height) / 2
         if self.x - margin > SCREEN_WIDTH: self.x = -margin
         if self.x + margin < 0: self.x = SCREEN_WIDTH + margin
-        if self.y - margin > SCREEN_HEIGHT: self.y = -margin # Screen wrap uses full screen height
+        if self.y - margin > SCREEN_HEIGHT: self.y = -margin
         if self.y + margin < 0: self.y = SCREEN_HEIGHT + margin
 
 
     def apply_lift_from_thermal(self, thermal_lift_power_at_nominal_speed):
-        if self.speed < STALL_SPEED: # If stalled, thermal provides no lift
+        if self.speed < STALL_SPEED:
             return
         lift_this_frame = thermal_lift_power_at_nominal_speed * (INITIAL_SPEED / max(self.speed, MIN_SPEED * 0.5))
         self.height += max(lift_this_frame, thermal_lift_power_at_nominal_speed * 0.2)
 
     def draw_contrail(self, surface):
         if len(self.trail_points) > 1:
-            # Contrail is drawn in world coordinates, no offset needed if GAME_WORLD_Y_OFFSET is 0
             for i, point in enumerate(self.trail_points):
                 alpha = int(200 * (i / CONTRAIL_LENGTH))
                 temp_surface = pygame.Surface((4,4), pygame.SRCALPHA)
@@ -228,9 +232,9 @@ class Glider(pygame.sprite.Sprite):
 
 # --- Thermal Class ---
 class Thermal(pygame.sprite.Sprite):
-    def __init__(self, center_pos): # center_pos is in world coordinates
+    def __init__(self, center_pos):
         super().__init__()
-        self.pos = pygame.math.Vector2(center_pos) # Store true world position
+        self.pos = pygame.math.Vector2(center_pos)
         self.radius = random.randint(MIN_THERMAL_RADIUS, MAX_THERMAL_RADIUS)
         
         if MAX_THERMAL_RADIUS == MIN_THERMAL_RADIUS: normalized_radius = 0.5
@@ -241,8 +245,7 @@ class Thermal(pygame.sprite.Sprite):
         self.lift_power = MAX_THERMAL_LIFT_POWER - (MAX_THERMAL_LIFT_POWER - MIN_THERMAL_LIFT_POWER) * normalized_radius
         
         self.image = pygame.Surface([self.radius * 2, self.radius * 2], pygame.SRCALPHA)
-        # Rect is for drawing, its y needs to be screen y. pos.y is world y.
-        self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y)) # Drawn at world y
+        self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
         self.creation_time = pygame.time.get_ticks()
         self.update_visuals()
 
@@ -261,7 +264,6 @@ class Thermal(pygame.sprite.Sprite):
         self.lifespan -= 1
         if self.lifespan <= 0: self.kill()
         else: self.update_visuals()
-        # Rect's y position for drawing is directly from self.pos.y (world coordinate)
         self.rect.centery = self.pos.y
 
 
@@ -269,6 +271,8 @@ class Thermal(pygame.sprite.Sprite):
 class ForegroundCloud(pygame.sprite.Sprite):
     def __init__(self, initial_distribution=False, index=0, total_clouds=1):
         super().__init__()
+        global current_wind_speed_x, current_wind_speed_y # Use current wind for cloud speed
+
         self.width = random.randint(100, 250); self.height = random.randint(40, 80)
         self.image = pygame.Surface([self.width, self.height], pygame.SRCALPHA)
         num_puffs = random.randint(4, 7)
@@ -277,28 +281,44 @@ class ForegroundCloud(pygame.sprite.Sprite):
             puff_x=random.randint(0,self.width-puff_w); puff_y=random.randint(0,self.height-puff_h)
             alpha = random.randint(CLOUD_MIN_ALPHA, CLOUD_MAX_ALPHA)
             pygame.draw.ellipse(self.image, (*CLOUD_COLOR, alpha), (puff_x, puff_y, puff_w, puff_h))
+        
         self.speed_factor = random.uniform(MIN_CLOUD_SPEED_FACTOR, MAX_CLOUD_SPEED_FACTOR)
-        self.dx = WIND_SPEED_X * self.speed_factor; self.dy = WIND_SPEED_Y * self.speed_factor
+        # Cloud movement is based on the *current* wind direction and speed
+        self.dx = current_wind_speed_x * self.speed_factor 
+        self.dy = current_wind_speed_y * self.speed_factor
+
         if initial_distribution:
             self.x = (index/total_clouds)*SCREEN_WIDTH - self.width/2 + random.uniform(-SCREEN_WIDTH/(total_clouds*2), SCREEN_WIDTH/(total_clouds*2))
             self.y = random.randint(-self.height//2, SCREEN_HEIGHT - self.height//2)
         else: 
+            # Spawn off-screen based on their calculated dx, dy
             if self.dx < 0: start_x = SCREEN_WIDTH + random.randint(0,100) + self.width/2
-            else: start_x = -random.randint(0,100) - self.width/2
+            elif self.dx > 0 : start_x = -random.randint(0,100) - self.width/2
+            else: start_x = random.randint(0, SCREEN_WIDTH - self.width) # If no horizontal wind
+
             if self.dy < 0: start_y = SCREEN_HEIGHT + random.randint(0,50) + self.height/2
             elif self.dy > 0: start_y = -random.randint(0,50) - self.height/2
-            else: start_y = random.randint(0, SCREEN_HEIGHT - self.height)
+            else: start_y = random.randint(0, SCREEN_HEIGHT - self.height) # If no vertical wind
+        
         self.rect = self.image.get_rect(topleft=(self.x if initial_distribution else start_x, self.y if initial_distribution else start_y))
         self.x = float(self.rect.x); self.y = float(self.rect.y)
 
     def update(self):
+        # Update cloud speed if wind changes (though wind changes per level, clouds are reset then)
+        self.dx = current_wind_speed_x * self.speed_factor 
+        self.dy = current_wind_speed_y * self.speed_factor
+
         self.x += self.dx; self.y += self.dy
         self.rect.topleft = (round(self.x), round(self.y))
         off_screen_margin = self.width*1.5 
-        if self.dx < 0 and self.rect.right < -off_screen_margin: self.kill()
-        elif self.dx > 0 and self.rect.left > SCREEN_WIDTH + off_screen_margin: self.kill()
-        if self.dy < 0 and self.rect.bottom < -off_screen_margin : self.kill()
-        elif self.dy > 0 and self.rect.top > SCREEN_HEIGHT + off_screen_margin : self.kill()
+        if self.dx != 0: # Only kill based on horizontal movement if there is horizontal movement
+            if self.dx < 0 and self.rect.right < -off_screen_margin: self.kill()
+            elif self.dx > 0 and self.rect.left > SCREEN_WIDTH + off_screen_margin: self.kill()
+        if self.dy != 0: # Only kill based on vertical movement if there is vertical movement
+            if self.dy < 0 and self.rect.bottom < -off_screen_margin : self.kill()
+            elif self.dy > 0 and self.rect.top > SCREEN_HEIGHT + off_screen_margin : self.kill()
+        # If a cloud has no movement (wind is zero and it spawned on screen), it might never despawn.
+        # This is less likely now that wind is always generated.
 
 
 # --- Map Data & Functions ---
@@ -309,15 +329,14 @@ def generate_map():
     weights = [0.15,0.35,0.20,0.15,0.15]
     for _ in range(MAP_GRID_HEIGHT): map_data.append(random.choices(land_types, weights=weights, k=MAP_GRID_WIDTH))
 
-def get_land_type_at_pos(world_x, world_y): # world_y is screen y
+def get_land_type_at_pos(world_x, world_y):
     grid_x = int(world_x // TILE_SIZE)%MAP_GRID_WIDTH
-    grid_y = int(world_y // TILE_SIZE)%MAP_GRID_HEIGHT # Map tiles are drawn from y=0
+    grid_y = int(world_y // TILE_SIZE)%MAP_GRID_HEIGHT
     return map_data[grid_y][grid_x]
 
 def draw_map(surface):
     for r_idx, row in enumerate(map_data):
         for c_idx, tile_type in enumerate(row):
-            # Map is drawn from y=0
             pygame.draw.rect(surface, LAND_TYPE_COLORS.get(tile_type,BLACK), (c_idx*TILE_SIZE, r_idx*TILE_SIZE, TILE_SIZE, TILE_SIZE))
 
 # --- Text Rendering Helper ---
@@ -332,7 +351,7 @@ def draw_text(surface, text, size, x, y, color=WHITE, font_name=None, center=Fal
 # --- Pygame Setup ---
 pygame.init(); pygame.mixer.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Pastel Glider - Height Indicator")
+pygame.display.set_caption("Pastel Glider - Wind Effects")
 clock = pygame.time.Clock()
 
 # --- Game Objects & Variables ---
@@ -343,19 +362,38 @@ current_level = 1; level_timer_start_ticks = 0; current_thermal_spawn_rate = BAS
 thermal_spawn_timer = 0; final_score = 0
 generate_map()
 
+def generate_new_wind():
+    global current_wind_speed_x, current_wind_speed_y
+    wind_angle_rad = random.uniform(0, 2 * math.pi)
+    wind_strength = random.uniform(0.1, MAX_WIND_STRENGTH) # Ensure some wind
+    current_wind_speed_x = wind_strength * math.cos(wind_angle_rad)
+    current_wind_speed_y = wind_strength * math.sin(wind_angle_rad)
+
 def start_new_level(level_num):
     global current_level,level_timer_start_ticks,current_thermal_spawn_rate,thermal_spawn_timer
     current_level=level_num; level_timer_start_ticks=pygame.time.get_ticks()
     current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE + (THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL * (current_level -1))
-    thermal_spawn_timer=0; generate_map(); thermals_group.empty()
+    thermal_spawn_timer=0
+    generate_map()
+    generate_new_wind() # Generate new wind for the level
+    thermals_group.empty()
+    
+    # Reset clouds for the new wind direction
+    foreground_clouds_group.empty()
+    for i in range(NUM_FOREGROUND_CLOUDS): 
+        foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
+
     start_h = START_HEIGHT_NEW_LEVEL if current_level > 1 else INITIAL_HEIGHT
     player.reset(start_height=start_h)
-    if player not in all_sprites: all_sprites.add(player) # Ensure player is in group if cleared
+    if player not in all_sprites: all_sprites.add(player)
 
 def reset_to_main_menu():
-    global game_state,current_level,final_score
+    global game_state,current_level,final_score, current_wind_speed_x, current_wind_speed_y
     player.reset(); thermals_group.empty(); all_sprites.empty(); all_sprites.add(player)
     foreground_clouds_group.empty()
+    # Set a default or no wind for menu screen clouds if desired, or use last game's wind
+    current_wind_speed_x = -0.2 # Gentle default for menu
+    current_wind_speed_y = 0.05
     for i in range(NUM_FOREGROUND_CLOUDS): foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
     current_level=1; final_score=0; game_state = STATE_START_SCREEN
 
@@ -363,20 +401,21 @@ def reset_to_main_menu():
 def draw_start_screen_content(surface):
     surface.fill(DARK_GRAY)
     draw_text(surface, "Pastel Glider", 64, SCREEN_WIDTH//2, SCREEN_HEIGHT//4 - 40, COLOR_PLAINS, center=True)
-    draw_text(surface, "Reach 1000m to advance!", 26, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 110, WHITE, center=True)
-    draw_text(surface, "UP/DOWN: Speed | L/R: Bank", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 70, WHITE, center=True)
-    draw_text(surface, f"Stall < {STALL_SPEED:.1f} speed (no thermal lift!)", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 40, WHITE, center=True)
-    draw_text(surface, "K_DOWN: Speed for Height", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 10, WHITE, center=True)
-    draw_text(surface, "Small thermals: strong/short. Large: gentle/long.", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 20, WHITE, center=True)
-    draw_text(surface, "Thermals rarer each level!", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50, WHITE, center=True)
-    draw_text(surface, "ENTER to Start", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT*3//4 + 30, LIGHT_GRAY, center=True)
-    draw_text(surface, "ESC for Menu", 20, SCREEN_WIDTH//2, SCREEN_HEIGHT*3//4 + 70, GRAY, center=True)
+    draw_text(surface, "Reach 1000m to advance!", 26, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 120, WHITE, center=True)
+    draw_text(surface, "UP/DOWN: Speed | L/R: Bank", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 80, WHITE, center=True)
+    draw_text(surface, f"Stall < {STALL_SPEED:.1f} speed (no thermal lift!)", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 50, WHITE, center=True)
+    draw_text(surface, "K_DOWN: Speed for Height | Diving: Height for Speed", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 20, WHITE, center=True)
+    draw_text(surface, "Small thermals: strong/short. Large: gentle/long.", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 10, WHITE, center=True)
+    draw_text(surface, "Thermals rarer & Wind changes each level!", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 40, WHITE, center=True)
+    draw_text(surface, "ENTER to Start", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT*3//4 + 20, LIGHT_GRAY, center=True)
+    draw_text(surface, "ESC for Menu", 20, SCREEN_WIDTH//2, SCREEN_HEIGHT*3//4 + 60, GRAY, center=True)
+
 
 def draw_level_complete_screen(surface, level, time_taken_seconds):
     surface.fill(DARK_GRAY)
     draw_text(surface, f"Level {level} Complete!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, GOLD, center=True)
     draw_text(surface, f"Time: {time_taken_seconds:.1f}s", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2, WHITE, center=True)
-    draw_text(surface, "ENTER for Next Level", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT*2//3, LIGHT_GRAY, center=True)
+    draw_text(surface, "Press ENTER for Next Level", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT*2//3, LIGHT_GRAY, center=True)
 
 def draw_game_over_screen_content(surface, score, level):
     surface.fill(DARK_GRAY)
@@ -389,44 +428,22 @@ def draw_height_indicator_hud(surface, current_player_height, target_h):
     indicator_bar_height = SCREEN_HEIGHT - HUD_HEIGHT - (2 * INDICATOR_Y_MARGIN_FROM_HUD)
     indicator_x_pos = SCREEN_WIDTH - INDICATOR_WIDTH - INDICATOR_X_MARGIN
     indicator_y_pos = HUD_HEIGHT + INDICATOR_Y_MARGIN_FROM_HUD
-
-    # Draw the main bar
     pygame.draw.rect(surface, INDICATOR_COLOR, (indicator_x_pos, indicator_y_pos, INDICATOR_WIDTH, indicator_bar_height))
-    
-    # Max height to display on the bar (could be target_h, or a bit more if player can exceed it)
-    max_indicator_height_value = target_h * 1.1 # Allow a little overshoot room visually
-
-    # Ground marker (bottom of the bar)
-    pygame.draw.line(surface, INDICATOR_GROUND_COLOR, 
-                     (indicator_x_pos - 5, indicator_y_pos + indicator_bar_height), 
-                     (indicator_x_pos + INDICATOR_WIDTH + 5, indicator_y_pos + indicator_bar_height), 3)
-    draw_text(surface, "0m", 14, indicator_x_pos + INDICATOR_WIDTH + 8, indicator_y_pos + indicator_bar_height - 7, WHITE)
-
-    # Target height marker (top of the bar if scaled to target_h)
-    target_marker_y_on_bar = indicator_y_pos # Top of bar
-    if max_indicator_height_value > target_h: # If bar shows more than target
-         target_marker_y_on_bar = indicator_y_pos + indicator_bar_height * (1 - (target_h / max_indicator_height_value))
-
-    pygame.draw.line(surface, INDICATOR_TARGET_COLOR, 
-                     (indicator_x_pos - 5, target_marker_y_on_bar), 
-                     (indicator_x_pos + INDICATOR_WIDTH + 5, target_marker_y_on_bar), 3)
-    draw_text(surface, f"{target_h}m", 14, indicator_x_pos + INDICATOR_WIDTH + 8, target_marker_y_on_bar - 7, INDICATOR_TARGET_COLOR)
-
-
-    # Player height marker
+    max_indicator_height_value = target_h * 1.1
+    pygame.draw.line(surface, INDICATOR_GROUND_COLOR, (indicator_x_pos-5, indicator_y_pos+indicator_bar_height), (indicator_x_pos+INDICATOR_WIDTH+5, indicator_y_pos+indicator_bar_height), 3)
+    draw_text(surface, "0m", 14, indicator_x_pos+INDICATOR_WIDTH+8, indicator_y_pos+indicator_bar_height-7, WHITE)
+    target_marker_y_on_bar = indicator_y_pos
+    if max_indicator_height_value > target_h: target_marker_y_on_bar = indicator_y_pos + indicator_bar_height*(1-(target_h/max_indicator_height_value))
+    pygame.draw.line(surface, INDICATOR_TARGET_COLOR, (indicator_x_pos-5, target_marker_y_on_bar), (indicator_x_pos+INDICATOR_WIDTH+5, target_marker_y_on_bar), 3)
+    draw_text(surface, f"{target_h}m", 14, indicator_x_pos+INDICATOR_WIDTH+8, target_marker_y_on_bar-7, INDICATOR_TARGET_COLOR)
     if current_player_height > 0:
-        player_height_ratio = min(current_player_height / max_indicator_height_value, 1.0) # Cap at 100% of bar
+        player_height_ratio = min(current_player_height / max_indicator_height_value, 1.0)
         player_marker_y_on_bar = indicator_y_pos + indicator_bar_height * (1 - player_height_ratio)
-        
-        pygame.draw.line(surface, INDICATOR_PLAYER_COLOR, 
-                         (indicator_x_pos, player_marker_y_on_bar), 
-                         (indicator_x_pos + INDICATOR_WIDTH, player_marker_y_on_bar), 5) # Thicker line for player
-        # Draw player height text next to their marker, avoid overlap with 0m and target
+        pygame.draw.line(surface, INDICATOR_PLAYER_COLOR, (indicator_x_pos, player_marker_y_on_bar), (indicator_x_pos+INDICATOR_WIDTH, player_marker_y_on_bar), 5)
         text_y = player_marker_y_on_bar - 7
-        if abs(text_y - (indicator_y_pos + indicator_bar_height - 7)) < 15 : text_y -=15 # Avoid 0m
-        if abs(text_y - (target_marker_y_on_bar - 7)) < 15 : text_y +=15 # Avoid target
-        draw_text(surface, f"{int(current_player_height)}m", 14, indicator_x_pos - 35, text_y, INDICATOR_PLAYER_COLOR)
-
+        if abs(text_y - (indicator_y_pos+indicator_bar_height-7)) < 15 : text_y -=15
+        if abs(text_y - (target_marker_y_on_bar-7)) < 15 : text_y +=15
+        draw_text(surface, f"{int(current_player_height)}m", 14, indicator_x_pos-35, text_y, INDICATOR_PLAYER_COLOR)
 
 # --- Game Loop ---
 running = True
@@ -458,47 +475,36 @@ while running:
         if thermal_spawn_timer >= current_thermal_spawn_rate:
             thermal_spawn_timer = 0
             try_x = random.randint(MAX_THERMAL_RADIUS, SCREEN_WIDTH - MAX_THERMAL_RADIUS)
-            try_y = random.randint(MAX_THERMAL_RADIUS, SCREEN_HEIGHT - MAX_THERMAL_RADIUS) # Thermals spawn in world coords
+            try_y = random.randint(MAX_THERMAL_RADIUS, SCREEN_HEIGHT - MAX_THERMAL_RADIUS)
             land_type = get_land_type_at_pos(try_x, try_y)
             if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
-                new_thermal = Thermal((try_x, try_y)) # Pass world coords
+                new_thermal = Thermal((try_x, try_y))
                 all_sprites.add(new_thermal); thermals_group.add(new_thermal)
 
-
-        player_pos_vec = pygame.math.Vector2(player.rect.centerx, player.rect.centery) # Player rect is screen coords
+        player_pos_vec = pygame.math.Vector2(player.rect.centerx, player.rect.centery)
         for thermal in thermals_group:
-            # thermal.pos is world coords, thermal.rect.center is screen coords
             distance_to_thermal_center = player_pos_vec.distance_to(thermal.rect.center) 
             if distance_to_thermal_center < thermal.radius + player.radius * 0.3: 
                 player.apply_lift_from_thermal(thermal.lift_power)
 
-        if player.height >= TARGET_HEIGHT_PER_LEVEL:
-            game_state = STATE_LEVEL_COMPLETE
-        if player.height <= 0:
-            final_score = player.height; player.height = 0; game_state = STATE_GAME_OVER
+        if player.height >= TARGET_HEIGHT_PER_LEVEL: game_state = STATE_LEVEL_COMPLETE
+        if player.height <= 0: final_score = player.height; player.height = 0; game_state = STATE_GAME_OVER
 
     # --- Drawing ---
     screen.fill(BLACK) 
     if game_state == STATE_START_SCREEN:
         draw_start_screen_content(screen)
+        foreground_clouds_group.draw(screen) # Draw clouds on start screen too
     elif game_state == STATE_LEVEL_COMPLETE:
         draw_level_complete_screen(screen, current_level, (current_ticks-level_timer_start_ticks)/1000.0)
+        foreground_clouds_group.draw(screen) # Clouds on level complete screen
     elif game_state == STATE_PLAYING:
-        draw_map(screen) # Map is drawn from y=0 (world coords)
-        
+        draw_map(screen)
         player.draw_contrail(screen) 
-        
-        for sprite in all_sprites: # Player and Thermals are in world coords
-            screen.blit(sprite.image, sprite.rect) # Draw them at their screen rects
-            
-        foreground_clouds_group.draw(screen) # Clouds are in screen coords
+        for sprite in all_sprites: screen.blit(sprite.image, sprite.rect)
+        foreground_clouds_group.draw(screen)
 
-        # --- Draw HUD Panel ---
-        hud_surface = pygame.Surface((SCREEN_WIDTH, HUD_HEIGHT), pygame.SRCALPHA)
-        hud_surface.fill(HUD_PANEL_COLOR)
-        screen.blit(hud_surface, (0,0))
-
-        # --- Draw HUD Text ---
+        hud_surface = pygame.Surface((SCREEN_WIDTH, HUD_HEIGHT), pygame.SRCALPHA); hud_surface.fill(HUD_PANEL_COLOR); screen.blit(hud_surface, (0,0))
         text_color_on_hud = WHITE; hud_margin = 10; line_spacing = 22; current_y = hud_margin
         draw_text(screen, f"Level: {current_level}", 20, hud_margin, current_y, text_color_on_hud)
         draw_text(screen, f"Target: {TARGET_HEIGHT_PER_LEVEL}m", 20, hud_margin + 120, current_y, text_color_on_hud)
@@ -509,18 +515,16 @@ while running:
         draw_text(screen, f"Height: {int(player.height)}m", 20, hud_margin, current_y, text_color_on_hud)
         draw_text(screen, f"Speed: {player.speed:.1f}", 20, hud_margin + 120, current_y, text_color_on_hud)
         
-        if player.speed < STALL_SPEED:
-             draw_text(screen, "STALL!", 24, SCREEN_WIDTH // 2, hud_margin + line_spacing // 2, RED, center=True)
+        if player.speed < STALL_SPEED: draw_text(screen, "STALL!", 24, SCREEN_WIDTH//2, hud_margin + line_spacing//2, RED, center=True)
         
-        wind_display_text = f"Wind: <{WIND_SPEED_X*10:.0f}, {WIND_SPEED_Y*10:.0f}>"
-        draw_text(screen, wind_display_text, 18, SCREEN_WIDTH - 200, hud_margin + 5, text_color_on_hud) # Moved left a bit
-        draw_text(screen, "ESC for Menu", 18, SCREEN_WIDTH - 200, hud_margin + 5 + line_spacing, text_color_on_hud) # Moved left
-
-        # --- Draw Height Indicator ---
+        # Display current wind (scaled for readability)
+        wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"
+        draw_text(screen, wind_display_text, 18, SCREEN_WIDTH - 200, hud_margin + 5, text_color_on_hud)
+        draw_text(screen, "ESC for Menu", 18, SCREEN_WIDTH - 200, hud_margin + 5 + line_spacing, text_color_on_hud)
         draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL)
-
     elif game_state == STATE_GAME_OVER:
         draw_game_over_screen_content(screen, final_score, current_level)
+        foreground_clouds_group.draw(screen) # Clouds on game over screen
 
     pygame.display.flip()
 pygame.quit()
