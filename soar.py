@@ -45,8 +45,8 @@ EASY_MODE_THERMAL_LIFT_MULTIPLIER = 1.75
 NOOB_MODE_THERMAL_LIFT_MULTIPLIER = 2.75 
 THERMAL_SPAWN_AREA_WIDTH = SCREEN_WIDTH + 300 
 THERMAL_SPAWN_AREA_HEIGHT = SCREEN_HEIGHT + 300 
-THERMAL_BASE_ALPHA = 100 # Re-added
-THERMAL_ACCENT_ALPHA = 120 # Re-added
+THERMAL_BASE_ALPHA = 100 
+THERMAL_ACCENT_ALPHA = 120 
 
 
 # Map
@@ -82,8 +82,10 @@ VSI_ARROW_SIZE = 8
 STATE_START_SCREEN = 0
 STATE_PLAYING = 1
 STATE_GAME_OVER = 2
-STATE_LEVEL_COMPLETE = 3
+STATE_TARGET_REACHED_OPTIONS = 3 
 STATE_DIFFICULTY_SELECT = 4 
+STATE_TARGET_REACHED_CONTINUE_PLAYING = 5 
+STATE_POST_GOAL_MENU = 6 
 
 # --- Game Difficulty ---
 DIFFICULTY_NOOB = 0    
@@ -126,7 +128,8 @@ PASTEL_INDICATOR_COLOR = (150, 160, 170)
 PASTEL_INDICATOR_GROUND = (200, 190, 180) 
 PASTEL_VSI_CLIMB = (173, 255, 173)      
 PASTEL_VSI_SINK = (255, 170, 170)        
-PASTEL_TEXT_COLOR_HUD = (70, 70, 80) 
+PASTEL_TEXT_COLOR_HUD = (70, 70, 80) # Darker color for HUD text for readability
+PASTEL_CONTRAIL_COLOR = PASTEL_TEXT_COLOR_HUD # Using HUD text color for contrail visibility
 
 MAP_TILE_OUTLINE_COLOR = (170, 175, 185) 
 
@@ -260,7 +263,8 @@ class Glider(pygame.sprite.Sprite):
         if len(self.trail_points) > 1:
             for i, world_point in enumerate(self.trail_points):
                 alpha = int(200 * (i / CONTRAIL_LENGTH))
-                contrail_dot_color = (210, 210, 220, alpha) 
+                # Use PASTEL_CONTRAIL_COLOR for better visibility
+                contrail_dot_color = (*PASTEL_CONTRAIL_COLOR, alpha) 
                 temp_surface = pygame.Surface((4,4), pygame.SRCALPHA)
                 pygame.draw.circle(temp_surface, contrail_dot_color, (2,2), 2)
                 screen_px = world_point[0] - cam_x; screen_py = world_point[1] - cam_y
@@ -293,8 +297,8 @@ class Thermal(pygame.sprite.Sprite):
     def update_visuals(self):
         pulse_alpha_factor = (math.sin(pygame.time.get_ticks()*0.005 + self.creation_time*0.01)*0.3 + 0.7)
         age_factor = max(0, self.lifespan / self.initial_lifespan if self.initial_lifespan > 0 else 0)
-        alpha = int(THERMAL_BASE_ALPHA * pulse_alpha_factor * age_factor) # Uses global THERMAL_BASE_ALPHA
-        accent_alpha = int(THERMAL_ACCENT_ALPHA * pulse_alpha_factor * age_factor) # Uses global THERMAL_ACCENT_ALPHA
+        alpha = int(THERMAL_BASE_ALPHA * pulse_alpha_factor * age_factor) 
+        accent_alpha = int(THERMAL_ACCENT_ALPHA * pulse_alpha_factor * age_factor) 
         visual_radius_factor = math.sin(pygame.time.get_ticks()*0.002 + self.creation_time*0.005)*0.1 + 0.95
         current_visual_radius = int(self.radius * visual_radius_factor)
         self.image.fill((0,0,0,0))
@@ -569,10 +573,20 @@ def draw_difficulty_select_screen(surface, selected_option):
 
     draw_text(surface, "Use UP/DOWN keys, ENTER to confirm", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT*0.85, PASTEL_LIGHT_GRAY, center=True)
 
-def draw_level_complete_screen(surface, level, time_taken_seconds_val):
-    surface.fill(PASTEL_DARK_GRAY); draw_text(surface, f"Level {level} Complete!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, PASTEL_GOLD, center=True, shadow=True, shadow_color=PASTEL_BLACK)
-    draw_text(surface, f"Time: {time_taken_seconds_val:.1f}s", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2, PASTEL_WHITE, center=True)
-    draw_text(surface, "Press ENTER for Next Level", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT*2//3, PASTEL_LIGHT_GRAY, center=True)
+def draw_target_reached_options_screen(surface, level, time_taken_seconds_val): 
+    surface.fill(PASTEL_DARK_GRAY)
+    draw_text(surface, f"Level {level} Goal Reached!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//3 - 20, PASTEL_GOLD, center=True, shadow=True, shadow_color=PASTEL_BLACK)
+    draw_text(surface, f"Time: {time_taken_seconds_val:.1f}s", 36, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 40, PASTEL_WHITE, center=True)
+    draw_text(surface, "Press M to Move On to Next Level", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 30, PASTEL_LIGHT_GRAY, center=True)
+    draw_text(surface, "Press C to Continue Flying This Level", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 70, PASTEL_LIGHT_GRAY, center=True)
+
+def draw_post_goal_menu_screen(surface, level): 
+    surface.fill(PASTEL_DARK_GRAY)
+    draw_text(surface, f"Level {level} - Cruising", 50, SCREEN_WIDTH//2, SCREEN_HEIGHT//4, PASTEL_GOLD, center=True, shadow=True, shadow_color=PASTEL_BLACK)
+    draw_text(surface, "Press N for Next Level", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 30, PASTEL_LIGHT_GRAY, center=True)
+    draw_text(surface, "Press Q to Quit to Main Menu", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 10, PASTEL_LIGHT_GRAY, center=True)
+    draw_text(surface, "Press R or ESCAPE to Resume Flying", 30, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50, PASTEL_LIGHT_GRAY, center=True)
+
 
 def draw_game_over_screen_content(surface, score, level):
     surface.fill(PASTEL_DARK_GRAY); draw_text(surface, "GAME OVER", 72, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, PASTEL_RED, center=True, shadow=True, shadow_color=PASTEL_BLACK)
@@ -658,47 +672,81 @@ while running:
                     game_difficulty = selected_difficulty_option 
                     start_new_level(1) 
             elif game_state == STATE_PLAYING:
-                if event.key == pygame.K_ESCAPE: reset_to_main_menu()
-            elif game_state == STATE_LEVEL_COMPLETE:
-                if event.key == pygame.K_RETURN: start_new_level(current_level + 1)
-            elif game_state == STATE_GAME_OVER:
+                if event.key == pygame.K_ESCAPE: reset_to_main_menu() 
+            
+            elif game_state == STATE_TARGET_REACHED_OPTIONS:
+                if event.key == pygame.K_m: 
+                    start_new_level(current_level + 1)
+                elif event.key == pygame.K_c: 
+                    game_state = STATE_TARGET_REACHED_CONTINUE_PLAYING
+            
+            elif game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING:
+                if event.key == pygame.K_ESCAPE:
+                    game_state = STATE_POST_GOAL_MENU 
+
+            elif game_state == STATE_POST_GOAL_MENU:
+                if event.key == pygame.K_n: 
+                    start_new_level(current_level + 1)
+                elif event.key == pygame.K_q: 
+                    reset_to_main_menu()
+                elif event.key == pygame.K_r or event.key == pygame.K_ESCAPE : 
+                    game_state = STATE_TARGET_REACHED_CONTINUE_PLAYING
+
+            elif game_state == STATE_GAME_OVER: 
                 if event.key == pygame.K_RETURN: reset_to_main_menu()
 
-    if game_state == STATE_PLAYING:
+
+    # --- Updates ---
+    if game_state == STATE_PLAYING or game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING:
         player.update(keys) 
         camera_x = player.world_x - SCREEN_WIDTH // 2
         camera_y = player.world_y - SCREEN_HEIGHT // 2
-        for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
+        
+        if game_state == STATE_PLAYING:
+            for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
+            thermal_spawn_timer += 1
+            if thermal_spawn_timer >= current_thermal_spawn_rate:
+                thermal_spawn_timer = 0
+                spawn_world_x = camera_x + random.randint(-THERMAL_SPAWN_AREA_WIDTH // 2, THERMAL_SPAWN_AREA_WIDTH // 2)
+                spawn_world_y = camera_y + random.randint(-THERMAL_SPAWN_AREA_HEIGHT // 2, THERMAL_SPAWN_AREA_HEIGHT // 2)
+                land_type = get_land_type_at_world_pos(spawn_world_x, spawn_world_y)
+                if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
+                    new_thermal = Thermal((spawn_world_x, spawn_world_y))
+                    all_world_sprites.add(new_thermal); thermals_group.add(new_thermal)
+        else: 
+             for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
+
         foreground_clouds_group.update()
         if len(foreground_clouds_group) < NUM_FOREGROUND_CLOUDS: foreground_clouds_group.add(ForegroundCloud())
-        thermal_spawn_timer += 1
-        if thermal_spawn_timer >= current_thermal_spawn_rate:
-            thermal_spawn_timer = 0
-            spawn_world_x = camera_x + random.randint(-THERMAL_SPAWN_AREA_WIDTH // 2, THERMAL_SPAWN_AREA_WIDTH // 2)
-            spawn_world_y = camera_y + random.randint(-THERMAL_SPAWN_AREA_HEIGHT // 2, THERMAL_SPAWN_AREA_HEIGHT // 2)
-            land_type = get_land_type_at_world_pos(spawn_world_x, spawn_world_y)
-            if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
-                new_thermal = Thermal((spawn_world_x, spawn_world_y))
-                all_world_sprites.add(new_thermal); thermals_group.add(new_thermal)
+        
         player_world_pos_vec = pygame.math.Vector2(player.world_x, player.world_y)
         for thermal in thermals_group:
             distance_to_thermal_center = player_world_pos_vec.distance_to(thermal.world_pos)
             if distance_to_thermal_center < thermal.radius + player.radius * 0.7:
                 player.apply_lift_from_thermal(thermal.lift_power)
-        if player.height >= TARGET_HEIGHT_PER_LEVEL:
-            game_state = STATE_LEVEL_COMPLETE; level_end_ticks = pygame.time.get_ticks()
+        
+        if game_state == STATE_PLAYING and player.height >= TARGET_HEIGHT_PER_LEVEL:
+            game_state = STATE_TARGET_REACHED_OPTIONS
+            level_end_ticks = pygame.time.get_ticks()
             time_taken_for_level = (level_end_ticks - level_timer_start_ticks) / 1000.0
-        if player.height <= 0:
+        
+        if player.height <= 0: 
             final_score = player.height; player.height = 0; game_state = STATE_GAME_OVER
 
+    # --- Drawing ---
     screen.fill(PASTEL_BLACK) 
     if game_state == STATE_START_SCREEN:
         draw_start_screen_content(screen); foreground_clouds_group.draw(screen)
     elif game_state == STATE_DIFFICULTY_SELECT:
         draw_difficulty_select_screen(screen, selected_difficulty_option); foreground_clouds_group.draw(screen)
-    elif game_state == STATE_LEVEL_COMPLETE:
-        draw_level_complete_screen(screen, current_level, time_taken_for_level); foreground_clouds_group.draw(screen)
-    elif game_state == STATE_PLAYING:
+    
+    elif game_state == STATE_TARGET_REACHED_OPTIONS: 
+        draw_target_reached_options_screen(screen, current_level, time_taken_for_level); foreground_clouds_group.draw(screen)
+    
+    elif game_state == STATE_POST_GOAL_MENU:
+        draw_post_goal_menu_screen(screen, current_level); foreground_clouds_group.draw(screen)
+
+    elif game_state == STATE_PLAYING or game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING:
         draw_endless_map(screen, camera_x, camera_y)
         player.draw_contrail(screen, camera_x, camera_y)
         all_world_sprites.draw(screen) 
@@ -709,17 +757,31 @@ while running:
         hud_margin = 10; line_spacing = 22; current_y_hud = hud_margin
         draw_text(screen, f"Level: {current_level}", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
         draw_text(screen, f"Target: {TARGET_HEIGHT_PER_LEVEL}m", 20, hud_margin + 120, current_y_hud, PASTEL_TEXT_COLOR_HUD); current_y_hud += line_spacing
-        timer_seconds = (current_ticks - level_timer_start_ticks) / 1000.0
-        draw_text(screen, f"Time: {timer_seconds:.1f}s", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD); current_y_hud += line_spacing
+        
+        if game_state == STATE_PLAYING:
+            timer_seconds = (current_ticks - level_timer_start_ticks) / 1000.0
+            draw_text(screen, f"Time: {timer_seconds:.1f}s", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
+        else: 
+            draw_text(screen, f"Time: {time_taken_for_level:.1f}s (Goal!)", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
+
+        current_y_hud += line_spacing
         draw_text(screen, f"Height: {int(player.height)}m", 20, hud_margin, current_y_hud, PASTEL_TEXT_COLOR_HUD)
         draw_text(screen, f"Speed: {player.speed:.1f}", 20, hud_margin + 120, current_y_hud, PASTEL_TEXT_COLOR_HUD)
         if player.speed < STALL_SPEED: draw_text(screen, "STALL!", 24, SCREEN_WIDTH//2, hud_margin + line_spacing//2, PASTEL_RED, center=True, shadow=True, shadow_color=PASTEL_BLACK)
         wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"; wind_text_x_pos = SCREEN_WIDTH - 220 
         draw_text(screen, wind_display_text, 18, wind_text_x_pos, hud_margin + 5, PASTEL_TEXT_COLOR_HUD)
-        draw_text(screen, "ESC for Menu", 18, wind_text_x_pos, hud_margin + 5 + line_spacing, PASTEL_TEXT_COLOR_HUD)
+        
+        # Show "ESC for Menu" or "ESC for Options" based on state
+        if game_state == STATE_PLAYING:
+            draw_text(screen, "ESC for Menu", 18, wind_text_x_pos, hud_margin + 5 + line_spacing, PASTEL_TEXT_COLOR_HUD)
+        elif game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING:
+             draw_text(screen, "ESC for Options", 18, wind_text_x_pos, hud_margin + 5 + line_spacing, PASTEL_TEXT_COLOR_HUD)
+
         draw_weather_vane(screen, current_wind_speed_x, current_wind_speed_y, wind_text_x_pos + 150, hud_margin + 25)
         draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL, player.vertical_speed)
+    
     elif game_state == STATE_GAME_OVER:
         draw_game_over_screen_content(screen, final_score, current_level); foreground_clouds_group.draw(screen)
+    
     pygame.display.flip()
 pygame.quit()
