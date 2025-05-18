@@ -223,8 +223,7 @@ class GliderBase(pygame.sprite.Sprite):
         
         self.image = self.original_image
         self.rect = self.image.get_rect() 
-        self.collision_radius = GLIDER_COLLISION_RADIUS # Used for player-AI and AI-AI
-        # self.radius was used for thermal collision for the player, ensure PlayerGlider has it or uses collision_radius
+        self.collision_radius = GLIDER_COLLISION_RADIUS 
         
         self.world_x = start_world_x; self.world_y = start_world_y
         self.heading = 0 
@@ -284,8 +283,6 @@ class PlayerGlider(GliderBase):
         self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
         self.previous_height = INITIAL_HEIGHT 
         self.vertical_speed = 0.0 
-        # self.radius attribute was implicitly part of the old Glider, 
-        # now collision_radius is in GliderBase. For thermal interaction, player will use collision_radius.
 
     def reset(self, start_height=INITIAL_HEIGHT):
         self.world_x = 0.0; self.world_y = 0.0 
@@ -1054,21 +1051,28 @@ while running:
                         ai1.apply_collision_effect()
                         ai2.apply_collision_effect()
 
+        # Update and Spawn Thermals
+        if game_state == STATE_PLAYING_FREE_FLY or \
+           game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING or \
+           game_state == STATE_RACE_PLAYING:
+            for thermal_sprite in thermals_group: 
+                thermal_sprite.update(camera_x, camera_y)
 
-        if game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_RACE_PLAYING : 
-            for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
-            thermal_spawn_timer += 1
-            if thermal_spawn_timer >= current_thermal_spawn_rate:
-                thermal_spawn_timer = 0
-                spawn_world_x = camera_x + random.randint(-THERMAL_SPAWN_AREA_WIDTH // 2, THERMAL_SPAWN_AREA_WIDTH // 2)
-                spawn_world_y = camera_y + random.randint(-THERMAL_SPAWN_AREA_HEIGHT // 2, THERMAL_SPAWN_AREA_HEIGHT // 2)
-                land_type = get_land_type_at_world_pos(spawn_world_x, spawn_world_y)
-                if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
-                    new_thermal = Thermal((spawn_world_x, spawn_world_y))
-                    all_world_sprites.add(new_thermal); thermals_group.add(new_thermal)
-        else: 
-             for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
-
+            if current_game_mode == MODE_FREE_FLY or current_game_mode == MODE_RACE: # Thermals active in these modes
+                # Spawn new thermals if in active play (Free Fly, Race, or Continue Free Fly)
+                if game_state == STATE_PLAYING_FREE_FLY or \
+                   game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING or \
+                   game_state == STATE_RACE_PLAYING : 
+                    thermal_spawn_timer += 1
+                    if thermal_spawn_timer >= current_thermal_spawn_rate:
+                        thermal_spawn_timer = 0
+                        spawn_world_x = camera_x + random.randint(-THERMAL_SPAWN_AREA_WIDTH // 2, THERMAL_SPAWN_AREA_WIDTH // 2)
+                        spawn_world_y = camera_y + random.randint(-THERMAL_SPAWN_AREA_HEIGHT // 2, THERMAL_SPAWN_AREA_HEIGHT // 2)
+                        land_type = get_land_type_at_world_pos(spawn_world_x, spawn_world_y)
+                        if random.random() < LAND_TYPE_THERMAL_PROBABILITY.get(land_type, 0.0):
+                            new_thermal = Thermal((spawn_world_x, spawn_world_y))
+                            all_world_sprites.add(new_thermal); thermals_group.add(new_thermal)
+        
         if game_state == STATE_RACE_PLAYING: 
             for i, marker in enumerate(race_course_markers):
                 marker.update(camera_x, camera_y, i == player.current_target_marker_index)
@@ -1078,9 +1082,10 @@ while running:
         if len(foreground_clouds_group) < NUM_FOREGROUND_CLOUDS: foreground_clouds_group.add(ForegroundCloud())
         
         player_world_pos_vec = pygame.math.Vector2(player.world_x, player.world_y)
-        for thermal in thermals_group: # This thermal interaction is for the player
+        for thermal in thermals_group: 
             dist_to_thermal = math.hypot(player.world_x - thermal.world_pos.x, player.world_y - thermal.world_pos.y)
-            if dist_to_thermal < thermal.radius + player.collision_radius * 0.7: # FIXED: Use collision_radius
+            # Use player's collision_radius for thermal interaction
+            if dist_to_thermal < thermal.radius + player.collision_radius * 0.7: 
                 player.apply_lift_from_thermal(thermal.lift_power)
         
         if game_state == STATE_PLAYING_FREE_FLY and player.height >= TARGET_HEIGHT_PER_LEVEL:
