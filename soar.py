@@ -13,13 +13,13 @@ MIN_SPEED = 1.0
 MAX_SPEED = 7
 ACCELERATION = 0.12
 
-STALL_SPEED = 1.8          # Speed below which glider stalls
-STALL_SINK_PENALTY = 0.08  # Additional sink rate when stalled
+STALL_SPEED = 1.8
+STALL_SINK_PENALTY = 0.08
 
 # Gravity and Lift
 GRAVITY_BASE_PULL = 0.22
 LIFT_PER_SPEED_UNIT = 0.03
-MINIMUM_SINK_RATE = 0.04 # Min sink when not stalled but still descending
+MINIMUM_SINK_RATE = 0.04
 
 # Energy Exchange Physics
 DIVE_TO_SPEED_FACTOR = 0.08
@@ -35,10 +35,15 @@ CONTRAIL_POINT_DELAY = 2
 
 # Thermals
 THERMAL_SPAWN_BASE_RATE = 90
-THERMAL_LIFESPAN = 800
 MIN_THERMAL_RADIUS = 20
 MAX_THERMAL_RADIUS = 50
-BASE_THERMAL_LIFT_POWER = 0.35
+
+# New Thermal Characteristics based on size
+MIN_THERMAL_LIFESPAN = 400   # Lifespan of the smallest thermals (frames)
+MAX_THERMAL_LIFESPAN = 1200  # Lifespan of the largest thermals (frames)
+MIN_THERMAL_LIFT_POWER = 0.20 # Lift power of the largest thermals (gentle)
+MAX_THERMAL_LIFT_POWER = 0.55 # Lift power of the smallest thermals (strong)
+
 
 # Map
 TILE_SIZE = 40
@@ -113,13 +118,12 @@ class Glider(pygame.sprite.Sprite):
 
         self.image = self.original_image
         self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-        self.radius = min(self.rect.width, self.rect.height) / 3 # Approx radius for circular collision
+        self.radius = min(self.rect.width, self.rect.height) / 3
 
         self.x = float(self.rect.centerx); self.y = float(self.rect.centery)
         self.heading = 0; self.bank_angle = 0
         self.height = INITIAL_HEIGHT; self.speed = INITIAL_SPEED
         self.trail_points = []; self.contrail_frame_counter = 0
-        # self.current_thermal_lift_bonus removed
 
     def reset(self):
         self.x = float(SCREEN_WIDTH // 2); self.y = float(SCREEN_HEIGHT // 2)
@@ -130,34 +134,27 @@ class Glider(pygame.sprite.Sprite):
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
 
     def update(self, keys):
-        # --- Speed Controls & Zoom Climb ---
         if keys[pygame.K_UP]:
             self.speed += ACCELERATION
         elif keys[pygame.K_DOWN]:
-            # If K_DOWN is pressed, reduce speed and convert that reduction to height (zoom climb)
-            # We apply ACCELERATION as the amount of speed "sacrificed" for the climb.
             potential_new_speed = self.speed - ACCELERATION
-            if potential_new_speed >= MIN_SPEED: # Only allow zoom if not going below min speed
+            if potential_new_speed >= MIN_SPEED:
                 self.speed = potential_new_speed
-                height_gain_from_zoom = ACCELERATION * ZOOM_CLIMB_FACTOR # Height gained is proportional to speed lost
+                height_gain_from_zoom = ACCELERATION * ZOOM_CLIMB_FACTOR
                 self.height += height_gain_from_zoom
-            else: # If reducing speed would go below MIN_SPEED, just set to MIN_SPEED
+            else:
                 self.speed = MIN_SPEED
-            
-        self.speed = max(MIN_SPEED, min(self.speed, MAX_SPEED)) # Clamp speed
+        self.speed = max(MIN_SPEED, min(self.speed, MAX_SPEED))
 
-        # --- Banking Controls ---
         if keys[pygame.K_LEFT]: self.bank_angle -= BANK_RATE
         elif keys[pygame.K_RIGHT]: self.bank_angle += BANK_RATE
-        else: self.bank_angle *= 0.95 # Auto-level
+        else: self.bank_angle *= 0.95
         if abs(self.bank_angle) < 0.1: self.bank_angle = 0
         self.bank_angle = max(-MAX_BANK_ANGLE, min(self.bank_angle, MAX_BANK_ANGLE))
 
-        # --- Turning Logic ---
         turn_rate_degrees = self.bank_angle * TURN_RATE_SCALAR
         self.heading = (self.heading + turn_rate_degrees) % 360
 
-        # --- Movement (Position Update) ---
         heading_rad = math.radians(self.heading)
         self.x += self.speed * math.cos(heading_rad)
         self.y += self.speed * math.sin(heading_rad)
@@ -165,34 +162,22 @@ class Glider(pygame.sprite.Sprite):
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
         self.rect = self.image.get_rect(center=(round(self.x), round(self.y)))
 
-        # --- Gravity, Lift, Stall, and Dive for Speed ---
-        height_change_due_to_physics = 0 # This will be the net change from aero forces
-
+        height_change_due_to_physics = 0
         if self.speed < STALL_SPEED:
-            # Stalled: Apply a significant sink rate. Lift from airspeed is considered negligible.
             height_change_due_to_physics = -GRAVITY_BASE_PULL - STALL_SINK_PENALTY
         else:
-            # Not Stalled: Normal lift and gravity calculation
             lift_from_airspeed = self.speed * LIFT_PER_SPEED_UNIT
             net_vertical_force = lift_from_airspeed - GRAVITY_BASE_PULL
-            
-            if net_vertical_force < 0: # If sinking naturally (and not stalled)
+            if net_vertical_force < 0:
                 height_change_due_to_physics = max(net_vertical_force, -MINIMUM_SINK_RATE)
-            else: # If climbing or level due to airspeed (and not stalled)
+            else:
                 height_change_due_to_physics = net_vertical_force
-        
-        self.height += height_change_due_to_physics # Apply height change from these physics
+        self.height += height_change_due_to_physics
 
-        # Dive for Speed: If sinking (due to stall or normal physics), convert some height loss to speed
-        # This happens *before* thermal lift is applied for the frame by the main game loop.
-        if height_change_due_to_physics < 0: 
+        if height_change_due_to_physics < 0:
             speed_gain_from_dive = abs(height_change_due_to_physics) * DIVE_TO_SPEED_FACTOR
-            self.speed = min(self.speed + speed_gain_from_dive, MAX_SPEED) # Clamp speed after dive
+            self.speed = min(self.speed + speed_gain_from_dive, MAX_SPEED)
 
-        # Note: Thermal lift is applied directly to self.height by apply_lift_from_thermal()
-        # called from the main game loop after collision detection.
-
-        # --- Contrail ---
         self.contrail_frame_counter +=1
         if self.contrail_frame_counter >= CONTRAIL_POINT_DELAY:
             self.contrail_frame_counter = 0
@@ -202,7 +187,6 @@ class Glider(pygame.sprite.Sprite):
             self.trail_points.append((self.rect.centerx + tail_offset_x, self.rect.centery + tail_offset_y))
             if len(self.trail_points) > CONTRAIL_LENGTH: self.trail_points.pop(0)
 
-        # --- Screen Wrap ---
         margin = max(self.rect.width, self.rect.height) / 2
         if self.x - margin > SCREEN_WIDTH: self.x = -margin
         if self.x + margin < 0: self.x = SCREEN_WIDTH + margin
@@ -210,11 +194,9 @@ class Glider(pygame.sprite.Sprite):
         if self.y + margin < 0: self.y = SCREEN_HEIGHT + margin
 
     def apply_lift_from_thermal(self, thermal_lift_power_at_nominal_speed):
-        # Slower speed in thermal = more effective lift per frame
         lift_this_frame = thermal_lift_power_at_nominal_speed * (INITIAL_SPEED / max(self.speed, MIN_SPEED * 0.5))
-        lift_this_frame = max(lift_this_frame, thermal_lift_power_at_nominal_speed * 0.2) # Min lift
+        lift_this_frame = max(lift_this_frame, thermal_lift_power_at_nominal_speed * 0.2)
         self.height += lift_this_frame
-        # No need to track self.current_thermal_lift_bonus here anymore
 
     def draw_contrail(self, surface):
         if len(self.trail_points) > 1:
@@ -230,16 +212,39 @@ class Thermal(pygame.sprite.Sprite):
         super().__init__()
         self.pos = pygame.math.Vector2(center_pos)
         self.radius = random.randint(MIN_THERMAL_RADIUS, MAX_THERMAL_RADIUS)
-        self.lift_power = BASE_THERMAL_LIFT_POWER * (self.radius / ((MIN_THERMAL_RADIUS + MAX_THERMAL_RADIUS)/2) )
+        
+        # --- Determine lifespan and lift power based on radius ---
+        # Normalized radius (0.0 for min_radius, 1.0 for max_radius)
+        if MAX_THERMAL_RADIUS == MIN_THERMAL_RADIUS: # Avoid division by zero if radii are the same
+            normalized_radius = 0.5
+        else:
+            normalized_radius = (self.radius - MIN_THERMAL_RADIUS) / (MAX_THERMAL_RADIUS - MIN_THERMAL_RADIUS)
+
+        # Lifespan: Larger thermals live longer
+        self.lifespan = MIN_THERMAL_LIFESPAN + (MAX_THERMAL_LIFESPAN - MIN_THERMAL_LIFESPAN) * normalized_radius
+        
+        # Lift Power: Smaller thermals are stronger (inverse relationship with normalized_radius)
+        self.lift_power = MAX_THERMAL_LIFT_POWER - (MAX_THERMAL_LIFT_POWER - MIN_THERMAL_LIFT_POWER) * normalized_radius
+        
         self.image = pygame.Surface([self.radius * 2, self.radius * 2], pygame.SRCALPHA)
         self.rect = self.image.get_rect(center=center_pos)
-        self.lifespan = THERMAL_LIFESPAN
         self.creation_time = pygame.time.get_ticks()
-        self.update_visuals()
+        self.update_visuals() # Initial draw
 
     def update_visuals(self):
         pulse_alpha_factor = (math.sin(pygame.time.get_ticks() * 0.005 + self.creation_time * 0.01) * 0.3 + 0.7)
-        age_factor = max(0, self.lifespan / THERMAL_LIFESPAN)
+        # Use the dynamically set self.lifespan for age calculation
+        # Ensure self.lifespan is not zero if it was just set (e.g. during init before first update)
+        current_lifespan_for_age = self.lifespan if hasattr(self, 'lifespan') and self.lifespan > 0 else MAX_THERMAL_LIFESPAN
+        # We need the initial lifespan to correctly calculate age_factor
+        # This requires storing the initial_lifespan or recalculating normalized_radius
+        # For simplicity, let's assume the current self.lifespan is the remaining, and THERMAL_LIFESPAN_BASE was the start
+        # This is tricky. Let's store initial_lifespan.
+        if not hasattr(self, 'initial_lifespan'): # Store it once
+            self.initial_lifespan = self.lifespan
+
+        age_factor = max(0, self.lifespan / self.initial_lifespan if self.initial_lifespan > 0 else 0)
+        
         alpha = int(THERMAL_BASE_ALPHA * pulse_alpha_factor * age_factor)
         accent_alpha = int(THERMAL_ACCENT_ALPHA * pulse_alpha_factor * age_factor)
         visual_radius_factor = math.sin(pygame.time.get_ticks() * 0.002 + self.creation_time * 0.005) * 0.1 + 0.95
@@ -332,7 +337,7 @@ def draw_text(surface, text, size, x, y, color=WHITE, font_name=None, center=Fal
 # --- Pygame Setup ---
 pygame.init(); pygame.mixer.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Pastel Glider - Stall Physics & Clouds")
+pygame.display.set_caption("Pastel Glider - Dynamic Thermals")
 clock = pygame.time.Clock()
 
 # --- Game Objects & Variables ---
@@ -361,7 +366,7 @@ def draw_start_screen_content(surface):
     draw_text(surface, f"Beware of stalling below {STALL_SPEED:.1f} speed!", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 65, WHITE, center=True)
     draw_text(surface, "Pull UP (K_DOWN) to trade speed for height.", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30, WHITE, center=True)
     draw_text(surface, "Diving converts height loss to speed.", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 5, WHITE, center=True)
-    draw_text(surface, "Ride thermals (slower = more lift).", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40, WHITE, center=True)
+    draw_text(surface, "Small thermals: strong, short lift. Large: gentle, long.", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40, WHITE, center=True)
     draw_text(surface, "Don't hit height zero!", 24, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 75, WHITE, center=True)
     draw_text(surface, "Press ENTER to Start", 32, SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4 + 40, LIGHT_GRAY, center=True)
     draw_text(surface, "ESC during game for Menu", 20, SCREEN_WIDTH // 2, SCREEN_HEIGHT * 3 // 4 + 80, GRAY, center=True)
@@ -388,9 +393,9 @@ while running:
 
     if game_state == STATE_PLAYING:
         keys = pygame.key.get_pressed()
-        player.update(keys) # Player physics, movement
-        thermals_group.update() # Thermals animate and expire
-        foreground_clouds_group.update() # Clouds scroll and despawn/respawn
+        player.update(keys)
+        thermals_group.update()
+        foreground_clouds_group.update()
 
         if len(foreground_clouds_group) < NUM_FOREGROUND_CLOUDS:
             cloud = ForegroundCloud() 
@@ -407,13 +412,13 @@ while running:
                 all_sprites.add(new_thermal); thermals_group.add(new_thermal)
 
         player_pos_vec = pygame.math.Vector2(player.rect.center)
-        for thermal in thermals_group: # Check collision with all active thermals
+        for thermal in thermals_group:
             distance_to_thermal_center = player_pos_vec.distance_to(thermal.pos)
             if distance_to_thermal_center < thermal.radius + player.radius * 0.3: 
                 player.apply_lift_from_thermal(thermal.lift_power)
 
         if player.height <= 0:
-            final_score = player.height; player.height = 0 # Prevent negative display on game over
+            final_score = player.height; player.height = 0
             game_state = STATE_GAME_OVER
 
     # --- Drawing ---
@@ -430,7 +435,7 @@ while running:
         draw_text(screen, f"Bank: {int(player.bank_angle)}°", 24, 10, 35, BLACK)
         draw_text(screen, f"Heading: {int(player.heading)}°", 24, 10, 60, BLACK)
         draw_text(screen, f"Height: {int(player.height)} m", 24, 10, 85, BLACK)
-        if player.speed < STALL_SPEED: # Stall warning
+        if player.speed < STALL_SPEED:
              draw_text(screen, "STALL!", 26, SCREEN_WIDTH // 2, 10, RED, center=True)
         wind_display_text = f"Wind: <{WIND_SPEED_X*10:.0f}, {WIND_SPEED_Y*10:.0f}>"
         draw_text(screen, wind_display_text, 18, SCREEN_WIDTH - 150, 10, BLACK)
