@@ -24,9 +24,20 @@ LIFT_PER_SPEED_UNIT = 0.03
 MINIMUM_SINK_RATE = 0.04 
 DIVE_TO_SPEED_FACTOR = 0.08
 ZOOM_CLIMB_FACTOR = 1.8
-MAX_BANK_ANGLE = 45
+MAX_BANK_ANGLE = 45 # Player's max bank
 BANK_RATE = 2
 TURN_RATE_SCALAR = 0.1
+GLIDER_COLLISION_RADIUS = 20 # For player and AI
+
+# AI Specific
+NUM_AI_OPPONENTS = 3 # Number of AI racers
+AI_TARGET_RACE_ALTITUDE = 450 # AI will try to stay around this height
+AI_ALTITUDE_CORRECTION_RATE = 0.2
+AI_SPEED_MIN = 2.5
+AI_SPEED_MAX = 4.5
+AI_TURN_RATE_SCALAR = 0.08 # How sharply AI can turn
+AI_MARKER_APPROACH_SLOWDOWN_DISTANCE = 200 # Distance to start slowing for a marker
+AI_MARKER_APPROACH_MIN_SPEED_FACTOR = 0.6 # Slow down to this factor of their max speed
 
 # Contrail
 CONTRAIL_LENGTH = 60
@@ -34,7 +45,7 @@ CONTRAIL_POINT_DELAY = 2
 
 # Thermals
 BASE_THERMAL_SPAWN_RATE = 100 
-THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL = 18 # Used in Free Fly
+THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL = 18 
 NORMAL_MIN_THERMAL_RADIUS = 25
 NORMAL_MAX_THERMAL_RADIUS = 60
 NORMAL_MIN_THERMAL_LIFESPAN = 450 
@@ -64,7 +75,7 @@ RACE_MARKER_RADIUS_WORLD = 75
 RACE_MARKER_VISUAL_RADIUS_MAP = 6 
 RACE_MARKER_VISUAL_RADIUS_WORLD = 25 
 DEFAULT_RACE_LAPS = 3
-RACE_COURSE_AREA_HALFWIDTH = 2500 # Markers will be +/- this from origin
+RACE_COURSE_AREA_HALFWIDTH = 2500 
 race_course_markers = []
 total_race_laps = DEFAULT_RACE_LAPS
 
@@ -82,7 +93,7 @@ CLOUD_MIN_ALPHA = 40
 CLOUD_MAX_ALPHA = 100
 
 # Game Mechanics
-TARGET_HEIGHT_PER_LEVEL = 1000 # For Free Fly mode
+TARGET_HEIGHT_PER_LEVEL = 1000 
 START_HEIGHT_NEW_LEVEL = 250
 
 # Height Indicator (HUD element, screen space)
@@ -147,6 +158,8 @@ PASTEL_RIVER = (200, 225, 250)
 
 PASTEL_GLIDER_BODY = (180, 180, 250) 
 PASTEL_GLIDER_WING = (200, 200, 255) 
+PASTEL_AI_GLIDER_BODY = (250, 180, 180) 
+PASTEL_AI_GLIDER_WING = (255, 200, 200)
 
 PASTEL_THERMAL_PRIMARY = (255, 200, 200) 
 PASTEL_THERMAL_ACCENT = PASTEL_WHITE    
@@ -187,40 +200,95 @@ LAND_TYPE_THERMAL_PROBABILITY = {
 camera_x = 0.0
 camera_y = 0.0
 
-# --- Glider Class ---
-class Glider(pygame.sprite.Sprite):
-    def __init__(self):
+# --- Glider Base Class (for Player and AI) ---
+class GliderBase(pygame.sprite.Sprite):
+    def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0):
         super().__init__()
         self.fuselage_length = 45; self.fuselage_thickness = 4
         self.wing_span = 70; self.wing_chord = 5
         self.tail_plane_span = 18; self.tail_plane_chord = 4; self.tail_fin_height = 8
         canvas_width = self.fuselage_length; canvas_height = self.wing_span
         self.original_image = pygame.Surface([canvas_width, canvas_height], pygame.SRCALPHA)
+        
         fuselage_y_top = (canvas_height - self.fuselage_thickness) / 2
-        pygame.draw.rect(self.original_image, PASTEL_GLIDER_BODY, (0, fuselage_y_top, self.fuselage_length, self.fuselage_thickness))
+        pygame.draw.rect(self.original_image, body_color, (0, fuselage_y_top, self.fuselage_length, self.fuselage_thickness))
         wing_leading_edge_x_from_tail = self.fuselage_length * 0.65
-        pygame.draw.rect(self.original_image, PASTEL_GLIDER_WING, (wing_leading_edge_x_from_tail, 0, self.wing_chord, self.wing_span))
+        pygame.draw.rect(self.original_image, wing_color, (wing_leading_edge_x_from_tail, 0, self.wing_chord, self.wing_span))
         tail_plane_y_top = (canvas_height - self.tail_plane_span) / 2
-        pygame.draw.rect(self.original_image, PASTEL_GLIDER_WING, (0, tail_plane_y_top, self.tail_plane_chord, self.tail_plane_span))
+        pygame.draw.rect(self.original_image, wing_color, (0, tail_plane_y_top, self.tail_plane_chord, self.tail_plane_span))
         fin_base_y = fuselage_y_top; fin_tip_y = fin_base_y - self.tail_fin_height
         fin_base_start_x = 0; fin_base_end_x = self.tail_plane_chord
         fin_tip_x = (fin_base_start_x + fin_base_end_x) / 2
-        pygame.draw.polygon(self.original_image, PASTEL_GLIDER_BODY, [(fin_base_start_x, fin_base_y), (fin_base_end_x, fin_base_y), (fin_tip_x, fin_tip_y)])
+        pygame.draw.polygon(self.original_image, body_color, [(fin_base_start_x, fin_base_y), (fin_base_end_x, fin_base_y), (fin_tip_x, fin_tip_y)])
+        
         self.image = self.original_image
-        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
-        self.radius = min(self.rect.width, self.rect.height) / 3 
-        self.world_x = 0.0; self.world_y = 0.0
-        self.heading = 0; self.bank_angle = 0
-        self.height = INITIAL_HEIGHT; self.speed = INITIAL_SPEED
-        self.previous_height = INITIAL_HEIGHT 
-        self.vertical_speed = 0.0 
-        self.trail_points = []; self.contrail_frame_counter = 0
+        self.rect = self.image.get_rect() 
+        self.collision_radius = GLIDER_COLLISION_RADIUS # Used for player-AI and AI-AI
+        # self.radius was used for thermal collision for the player, ensure PlayerGlider has it or uses collision_radius
+        
+        self.world_x = start_world_x; self.world_y = start_world_y
+        self.heading = 0 
+        self.bank_angle = 0 
+        self.height = INITIAL_HEIGHT
+        self.speed = INITIAL_SPEED
+        
+        self.trail_points = []
+        self.contrail_frame_counter = 0
+        
         self.current_target_marker_index = 0
         self.laps_completed = 0
 
+    def update_sprite_rotation_and_position(self, cam_x=None, cam_y=None):
+        self.image = pygame.transform.rotate(self.original_image, -self.heading)
+        if isinstance(self, PlayerGlider): 
+             self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        elif cam_x is not None and cam_y is not None: 
+             self.rect = self.image.get_rect(center=(self.world_x - cam_x, self.world_y - cam_y))
+
+
+    def update_contrail(self):
+        heading_rad = math.radians(self.heading)
+        self.contrail_frame_counter +=1
+        if self.contrail_frame_counter >= CONTRAIL_POINT_DELAY:
+            self.contrail_frame_counter = 0
+            effective_tail_offset = (self.fuselage_length / 2) - 2
+            tail_offset_x_world = -effective_tail_offset * math.cos(heading_rad)
+            tail_offset_y_world = -effective_tail_offset * math.sin(heading_rad)
+            contrail_world_x = self.world_x + tail_offset_x_world
+            contrail_world_y = self.world_y + tail_offset_y_world
+            self.trail_points.append((contrail_world_x, contrail_world_y))
+            if len(self.trail_points) > CONTRAIL_LENGTH: self.trail_points.pop(0)
+    
+    def draw_contrail(self, surface, cam_x, cam_y):
+        if len(self.trail_points) > 1:
+            for i, world_point in enumerate(self.trail_points):
+                alpha = int(200 * (i / CONTRAIL_LENGTH))
+                contrail_dot_color = (*PASTEL_CONTRAIL_COLOR, alpha) 
+                temp_surface = pygame.Surface((4,4), pygame.SRCALPHA)
+                pygame.draw.circle(temp_surface, contrail_dot_color, (2,2), 2)
+                screen_px = world_point[0] - cam_x; screen_py = world_point[1] - cam_y
+                surface.blit(temp_surface, (screen_px - 2, screen_py - 2))
+
+    def apply_collision_effect(self):
+        self.speed *= 0.5 
+        knockback_angle = random.uniform(0, 2 * math.pi)
+        knockback_dist = 5
+        self.world_x += knockback_dist * math.cos(knockback_angle)
+        self.world_y += knockback_dist * math.sin(knockback_angle)
+
+
+# --- PlayerGlider Class ---
+class PlayerGlider(GliderBase):
+    def __init__(self):
+        super().__init__(PASTEL_GLIDER_BODY, PASTEL_GLIDER_WING)
+        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
+        self.previous_height = INITIAL_HEIGHT 
+        self.vertical_speed = 0.0 
+        # self.radius attribute was implicitly part of the old Glider, 
+        # now collision_radius is in GliderBase. For thermal interaction, player will use collision_radius.
 
     def reset(self, start_height=INITIAL_HEIGHT):
-        self.world_x = 0.0; self.world_y = 0.0 # Player always starts at world origin
+        self.world_x = 0.0; self.world_y = 0.0 
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2) 
         self.heading = 0; self.bank_angle = 0
         self.height = start_height; self.speed = INITIAL_SPEED
@@ -229,6 +297,7 @@ class Glider(pygame.sprite.Sprite):
         self.trail_points = []; self.contrail_frame_counter = 0
         self.current_target_marker_index = 0
         self.laps_completed = 0
+        self.update_sprite_rotation_and_position()
 
 
     def update(self, keys):
@@ -252,8 +321,7 @@ class Glider(pygame.sprite.Sprite):
         heading_rad = math.radians(self.heading)
         self.world_x += self.speed * math.cos(heading_rad) + current_wind_speed_x
         self.world_y += self.speed * math.sin(heading_rad) + current_wind_speed_y
-        self.image = pygame.transform.rotate(self.original_image, -self.heading)
-        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
+        
         height_change_due_to_physics = 0
         if self.speed < STALL_SPEED:
             height_change_due_to_physics = -GRAVITY_BASE_PULL - STALL_SINK_PENALTY
@@ -266,17 +334,8 @@ class Glider(pygame.sprite.Sprite):
             self.speed = min(self.speed + abs(height_change_due_to_physics) * DIVE_TO_SPEED_FACTOR, MAX_SPEED)
         
         self.vertical_speed = self.height - self.previous_height 
-
-        self.contrail_frame_counter +=1
-        if self.contrail_frame_counter >= CONTRAIL_POINT_DELAY:
-            self.contrail_frame_counter = 0
-            effective_tail_offset = (self.fuselage_length / 2) - 2
-            tail_offset_x_world = -effective_tail_offset * math.cos(heading_rad)
-            tail_offset_y_world = -effective_tail_offset * math.sin(heading_rad)
-            contrail_world_x = self.world_x + tail_offset_x_world
-            contrail_world_y = self.world_y + tail_offset_y_world
-            self.trail_points.append((contrail_world_x, contrail_world_y))
-            if len(self.trail_points) > CONTRAIL_LENGTH: self.trail_points.pop(0)
+        self.update_sprite_rotation_and_position() 
+        self.update_contrail()
 
         if game_state == STATE_RACE_PLAYING and race_course_markers:
             target_marker = race_course_markers[self.current_target_marker_index]
@@ -304,15 +363,65 @@ class Glider(pygame.sprite.Sprite):
         lift_this_frame = actual_lift_power * (INITIAL_SPEED / max(self.speed, MIN_SPEED * 0.5))
         self.height += max(lift_this_frame, actual_lift_power * 0.2)
 
-    def draw_contrail(self, surface, cam_x, cam_y):
-        if len(self.trail_points) > 1:
-            for i, world_point in enumerate(self.trail_points):
-                alpha = int(200 * (i / CONTRAIL_LENGTH))
-                contrail_dot_color = (*PASTEL_CONTRAIL_COLOR, alpha) 
-                temp_surface = pygame.Surface((4,4), pygame.SRCALPHA)
-                pygame.draw.circle(temp_surface, contrail_dot_color, (2,2), 2)
-                screen_px = world_point[0] - cam_x; screen_py = world_point[1] - cam_y
-                surface.blit(temp_surface, (screen_px - 2, screen_py - 2))
+# --- AI Glider Class ---
+class AIGlider(GliderBase):
+    def __init__(self, start_world_x, start_world_y):
+        super().__init__(PASTEL_AI_GLIDER_BODY, PASTEL_AI_GLIDER_WING, start_world_x, start_world_y)
+        self.speed = random.uniform(AI_SPEED_MIN, AI_SPEED_MAX)
+        self.height = AI_TARGET_RACE_ALTITUDE + random.uniform(-50, 50) 
+        self.target_speed = self.speed
+
+    def update(self, cam_x, cam_y, race_markers_list, total_laps_in_race): 
+        global game_state 
+        if not race_markers_list or game_state != STATE_RACE_PLAYING:
+            self.update_sprite_rotation_and_position(cam_x, cam_y)
+            self.update_contrail()
+            return
+
+        target_marker = race_markers_list[self.current_target_marker_index]
+        dx = target_marker.world_pos.x - self.world_x
+        dy = target_marker.world_pos.y - self.world_y
+        dist_to_marker = math.hypot(dx, dy)
+        
+        target_angle_rad = math.atan2(dy, dx)
+        target_angle_deg = math.degrees(target_angle_rad)
+        current_heading_deg = self.heading % 360
+        target_angle_deg = target_angle_deg % 360
+        angle_diff = target_angle_deg - current_heading_deg
+        if angle_diff > 180: angle_diff -= 360
+        if angle_diff < -180: angle_diff += 360
+        turn_this_frame = angle_diff * AI_TURN_RATE_SCALAR 
+        self.heading = (self.heading + turn_this_frame) % 360
+        
+        if dist_to_marker < AI_MARKER_APPROACH_SLOWDOWN_DISTANCE:
+            self.target_speed = AI_SPEED_MIN + (AI_SPEED_MAX - AI_SPEED_MIN) * (dist_to_marker / AI_MARKER_APPROACH_SLOWDOWN_DISTANCE) * AI_MARKER_APPROACH_MIN_SPEED_FACTOR
+            self.target_speed = max(AI_SPEED_MIN * 0.8, self.target_speed) 
+        else:
+            self.target_speed = random.uniform(AI_SPEED_MIN, AI_SPEED_MAX) 
+
+        if self.speed < self.target_speed: self.speed += ACCELERATION * 0.5 
+        elif self.speed > self.target_speed: self.speed -= ACCELERATION * 0.5
+        self.speed = max(AI_SPEED_MIN * 0.7, min(self.speed, AI_SPEED_MAX * 1.1)) 
+
+        alt_diff = AI_TARGET_RACE_ALTITUDE - self.height
+        self.height += alt_diff * AI_ALTITUDE_CORRECTION_RATE
+        if self.height < 0: self.height = 0 
+
+        heading_rad = math.radians(self.heading)
+        self.world_x += self.speed * math.cos(heading_rad) 
+        self.world_y += self.speed * math.sin(heading_rad)
+
+        if dist_to_marker < target_marker.world_radius:
+            self.current_target_marker_index += 1
+            if self.current_target_marker_index >= len(race_markers_list):
+                self.laps_completed += 1
+                self.current_target_marker_index = 0
+                if self.laps_completed >= total_laps_in_race:
+                    pass 
+        
+        self.update_sprite_rotation_and_position(cam_x, cam_y)
+        self.update_contrail()
+
 
 # --- Thermal Class ---
 class Thermal(pygame.sprite.Sprite):
@@ -371,7 +480,7 @@ class RaceMarker(pygame.sprite.Sprite):
 
     def _draw_marker_image(self, is_active):
         color_to_use = PASTEL_ACTIVE_MARKER_COLOR if is_active else PASTEL_MARKER_COLOR
-        if is_active and self.number == 1: # Start/Finish line marker
+        if is_active and self.number == 1: 
             color_to_use = PASTEL_GOLD 
 
         self.image.fill((0,0,0,0)) 
@@ -397,7 +506,7 @@ class Minimap:
         self.margin = margin
         self.surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         self.rect = self.surface.get_rect(topright=(SCREEN_WIDTH - self.margin, self.margin + HUD_HEIGHT))
-        self.world_bounds_view_radius = 3000 # How much of the world the minimap tries to show around player
+        self.world_bounds_view_radius = 3000 
 
     def world_to_minimap(self, world_x, world_y, player_world_x, player_world_y):
         scale_x = self.width / (2 * self.world_bounds_view_radius)
@@ -408,11 +517,15 @@ class Minimap:
         mini_y = self.height / 2 + rel_y * scale_y
         return int(mini_x), int(mini_y)
 
-    def draw(self, surface, player_glider, course_markers):
+    def draw(self, surface, player_glider, ai_gliders_list, course_markers): 
         self.surface.fill(PASTEL_MINIMAP_BACKGROUND) 
         player_mini_x, player_mini_y = self.width // 2, self.height // 2 
-        pygame.draw.circle(self.surface, PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
+        pygame.draw.circle(self.surface, PASTEL_GOLD, (player_mini_x, player_mini_y), 5) 
         
+        for ai in ai_gliders_list:
+            ai_mini_x, ai_mini_y = self.world_to_minimap(ai.world_x, ai.world_y, player_glider.world_x, player_glider.world_y)
+            pygame.draw.circle(self.surface, PASTEL_AI_GLIDER_BODY, (ai_mini_x, ai_mini_y), 4) 
+
         for i, marker in enumerate(course_markers):
             mini_x, mini_y = self.world_to_minimap(marker.world_pos.x, marker.world_pos.y, player_glider.world_x, player_glider.world_y)
             
@@ -609,7 +722,9 @@ pygame.display.set_caption("Pastel Glider - Floating Dreams")
 clock = pygame.time.Clock()
 
 # --- Game Objects & Variables ---
-player = Glider()
+player = PlayerGlider() 
+ai_gliders = pygame.sprite.Group() 
+
 all_world_sprites = pygame.sprite.Group() 
 thermals_group = pygame.sprite.Group()    
 race_markers_group = pygame.sprite.Group() 
@@ -626,7 +741,7 @@ lap_options = [1, 3, 5]
 minimap = Minimap(MINIMAP_WIDTH, MINIMAP_HEIGHT, MINIMAP_MARGIN)
 
 
-def generate_race_course(num_markers=8): # Removed course_radius, using constant
+def generate_race_course(num_markers=8): 
     global race_course_markers, race_markers_group, all_world_sprites
     race_course_markers.clear()
     race_markers_group.empty()
@@ -634,7 +749,6 @@ def generate_race_course(num_markers=8): # Removed course_radius, using constant
         if isinstance(sprite, RaceMarker):
             sprite.kill()
 
-    # Markers are placed randomly within RACE_COURSE_AREA_HALFWIDTH of world origin (0,0)
     for i in range(num_markers):
         world_x = random.uniform(-RACE_COURSE_AREA_HALFWIDTH, RACE_COURSE_AREA_HALFWIDTH)
         world_y = random.uniform(-RACE_COURSE_AREA_HALFWIDTH, RACE_COURSE_AREA_HALFWIDTH)
@@ -653,7 +767,7 @@ def generate_new_wind():
 
 def start_new_level(level_num_or_laps): 
     global current_level,level_timer_start_ticks,current_thermal_spawn_rate,thermal_spawn_timer, game_state
-    global current_map_offset_x, current_map_offset_y, _river_param_random, total_race_laps
+    global current_map_offset_x, current_map_offset_y, _river_param_random, total_race_laps, ai_gliders
     
     level_timer_start_ticks=pygame.time.get_ticks() 
     
@@ -668,6 +782,7 @@ def start_new_level(level_num_or_laps):
     all_world_sprites.empty() 
     race_markers_group.empty() 
     race_course_markers.clear()
+    ai_gliders.empty()
 
 
     foreground_clouds_group.empty()
@@ -688,6 +803,16 @@ def start_new_level(level_num_or_laps):
     elif current_game_mode == MODE_RACE:
         total_race_laps = level_num_or_laps 
         generate_race_course() 
+        for i in range(NUM_AI_OPPONENTS):
+            offset_angle = (i / NUM_AI_OPPONENTS) * 2 * math.pi
+            offset_dist = 50 + i * 20
+            ai_start_x = player.world_x + offset_dist * math.cos(offset_angle)
+            ai_start_y = player.world_y + offset_dist * math.sin(offset_angle)
+            new_ai = AIGlider(ai_start_x, ai_start_y)
+            ai_gliders.add(new_ai)
+            all_world_sprites.add(new_ai)
+
+
         current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE 
         if game_difficulty == DIFFICULTY_NOOB: current_thermal_spawn_rate = max(20, current_thermal_spawn_rate // 2) 
         thermal_spawn_timer=0
@@ -696,8 +821,9 @@ def start_new_level(level_num_or_laps):
 
 def reset_to_main_menu():
     global game_state,current_level,final_score, current_wind_speed_x, current_wind_speed_y 
-    global selected_difficulty_option, selected_mode_option, selected_laps_option
+    global selected_difficulty_option, selected_mode_option, selected_laps_option, ai_gliders
     player.reset(); thermals_group.empty(); all_world_sprites.empty(); race_markers_group.empty(); race_course_markers.clear()
+    ai_gliders.empty()
     foreground_clouds_group.empty()
     current_wind_speed_x = -0.2; current_wind_speed_y = 0.05 
     for i in range(NUM_FOREGROUND_CLOUDS): foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
@@ -908,6 +1034,27 @@ while running:
         camera_x = player.world_x - SCREEN_WIDTH // 2
         camera_y = player.world_y - SCREEN_HEIGHT // 2
         
+        if game_state == STATE_RACE_PLAYING:
+            for ai in ai_gliders:
+                ai.update(camera_x, camera_y, race_course_markers, total_race_laps)
+            
+            for ai in ai_gliders:
+                dist_pa = math.hypot(player.world_x - ai.world_x, player.world_y - ai.world_y)
+                if dist_pa < player.collision_radius + ai.collision_radius:
+                    player.apply_collision_effect()
+                    ai.apply_collision_effect()
+            
+            ai_list_for_collision = list(ai_gliders)
+            for i in range(len(ai_list_for_collision)):
+                for j in range(i + 1, len(ai_list_for_collision)):
+                    ai1 = ai_list_for_collision[i]
+                    ai2 = ai_list_for_collision[j]
+                    dist_aa = math.hypot(ai1.world_x - ai2.world_x, ai1.world_y - ai2.world_y)
+                    if dist_aa < ai1.collision_radius + ai2.collision_radius:
+                        ai1.apply_collision_effect()
+                        ai2.apply_collision_effect()
+
+
         if game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_RACE_PLAYING : 
             for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
             thermal_spawn_timer += 1
@@ -922,7 +1069,7 @@ while running:
         else: 
              for thermal_sprite in thermals_group: thermal_sprite.update(camera_x, camera_y)
 
-        if game_state == STATE_RACE_PLAYING: # Also update markers when race is active
+        if game_state == STATE_RACE_PLAYING: 
             for i, marker in enumerate(race_course_markers):
                 marker.update(camera_x, camera_y, i == player.current_target_marker_index)
 
@@ -931,9 +1078,9 @@ while running:
         if len(foreground_clouds_group) < NUM_FOREGROUND_CLOUDS: foreground_clouds_group.add(ForegroundCloud())
         
         player_world_pos_vec = pygame.math.Vector2(player.world_x, player.world_y)
-        for thermal in thermals_group:
-            distance_to_thermal_center = player_world_pos_vec.distance_to(thermal.world_pos)
-            if distance_to_thermal_center < thermal.radius + player.radius * 0.7:
+        for thermal in thermals_group: # This thermal interaction is for the player
+            dist_to_thermal = math.hypot(player.world_x - thermal.world_pos.x, player.world_y - thermal.world_pos.y)
+            if dist_to_thermal < thermal.radius + player.collision_radius * 0.7: # FIXED: Use collision_radius
                 player.apply_lift_from_thermal(thermal.lift_power)
         
         if game_state == STATE_PLAYING_FREE_FLY and player.height >= TARGET_HEIGHT_PER_LEVEL:
@@ -965,8 +1112,12 @@ while running:
     elif game_state == STATE_PLAYING_FREE_FLY or game_state == STATE_TARGET_REACHED_CONTINUE_PLAYING or game_state == STATE_RACE_PLAYING:
         draw_endless_map(screen, camera_x, camera_y)
         player.draw_contrail(screen, camera_x, camera_y)
+        for ai_glider in ai_gliders: 
+            ai_glider.draw_contrail(screen, camera_x, camera_y)
+        
         all_world_sprites.draw(screen) 
         screen.blit(player.image, player.rect) 
+        
         foreground_clouds_group.draw(screen) 
         
         hud_surface = pygame.Surface((SCREEN_WIDTH, HUD_HEIGHT), pygame.SRCALPHA); hud_surface.fill(PASTEL_HUD_PANEL); screen.blit(hud_surface, (0,0))
@@ -982,8 +1133,7 @@ while running:
                 dist_to_marker = math.hypot(player.world_x - target_marker.world_pos.x, player.world_y - target_marker.world_pos.y)
                 draw_text(screen, f"Marker {target_marker.number}: {int(dist_to_marker/10)}m", 20, hud_margin + 150, current_y_hud, PASTEL_TEXT_COLOR_HUD)
                 
-                # HUD Arrow
-                marker_screen_x = target_marker.rect.centerx # Use marker's current screen position
+                marker_screen_x = target_marker.rect.centerx 
                 marker_screen_y = target_marker.rect.centery
                 
                 hud_arrow_base_x = SCREEN_WIDTH - MINIMAP_WIDTH - MINIMAP_MARGIN - 40 
@@ -1027,7 +1177,7 @@ while running:
         draw_height_indicator_hud(screen, player.height, TARGET_HEIGHT_PER_LEVEL if current_game_mode == MODE_FREE_FLY else player.height + 100, player.vertical_speed) 
 
         if current_game_mode == MODE_RACE and (game_state == STATE_RACE_PLAYING or game_state == STATE_RACE_COMPLETE): 
-            minimap.draw(screen, player, race_course_markers)
+            minimap.draw(screen, player, ai_gliders, race_course_markers) 
     
     elif game_state == STATE_GAME_OVER:
         draw_game_over_screen_content(screen, final_score, current_level); foreground_clouds_group.draw(screen)
