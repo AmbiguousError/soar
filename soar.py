@@ -28,23 +28,31 @@ TURN_RATE_SCALAR = 0.1
 CONTRAIL_LENGTH = 60
 CONTRAIL_POINT_DELAY = 2
 
-# Thermals (Reintroduced)
-BASE_THERMAL_SPAWN_RATE = 100 # Frames per potential spawn
+# Thermals
+BASE_THERMAL_SPAWN_RATE = 100 
 THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL = 18
-MIN_THERMAL_RADIUS = 25
-MAX_THERMAL_RADIUS = 60
-MIN_THERMAL_LIFESPAN = 450 # Frames
-MAX_THERMAL_LIFESPAN = 1300 # Frames
-MIN_THERMAL_LIFT_POWER = 0.22 # Base lift power for Normal mode
-MAX_THERMAL_LIFT_POWER = 0.60 # Base lift power for Normal mode
-THERMAL_SPAWN_AREA_WIDTH = SCREEN_WIDTH + 300 # Adjusted based on new screen width
-THERMAL_SPAWN_AREA_HEIGHT = SCREEN_HEIGHT + 300 # Adjusted based on new screen height
-EASY_MODE_THERMAL_LIFT_MULTIPLIER = 1.75 # Thermals are stronger in easy mode
+# Normal/Easy Mode Thermal Properties
+NORMAL_MIN_THERMAL_RADIUS = 25
+NORMAL_MAX_THERMAL_RADIUS = 60
+NORMAL_MIN_THERMAL_LIFESPAN = 450 
+NORMAL_MAX_THERMAL_LIFESPAN = 1300 
+MIN_THERMAL_LIFT_POWER = 0.22 
+MAX_THERMAL_LIFT_POWER = 0.60 
+# N00b Mode Thermal Properties
+NOOB_MIN_THERMAL_RADIUS = 60
+NOOB_MAX_THERMAL_RADIUS = 120
+NOOB_MIN_THERMAL_LIFESPAN = 900
+NOOB_MAX_THERMAL_LIFESPAN = 2200
+# Difficulty Multipliers
+EASY_MODE_THERMAL_LIFT_MULTIPLIER = 1.75 
+NOOB_MODE_THERMAL_LIFT_MULTIPLIER = 2.75 # Even stronger lift for n00b
+
+THERMAL_SPAWN_AREA_WIDTH = SCREEN_WIDTH + 300 
+THERMAL_SPAWN_AREA_HEIGHT = SCREEN_HEIGHT + 300 
 
 # Map
 TILE_SIZE = 40
-# MAP_TILE_OUTLINE_COLOR definition moved after Colors block
-MAP_TILE_OUTLINE_WIDTH = 1 # Width of tile outlines, 0 for no outline
+MAP_TILE_OUTLINE_WIDTH = 1 
 
 # Wind
 MAX_WIND_STRENGTH = 1.0
@@ -52,7 +60,7 @@ current_wind_speed_x = 0.0
 current_wind_speed_y = 0.0
 
 # Clouds (Screen-space effects)
-NUM_FOREGROUND_CLOUDS = 12 # May need adjustment for larger screen
+NUM_FOREGROUND_CLOUDS = 15 # Slightly increased for larger screen
 MIN_CLOUD_SPEED_FACTOR = 1.5
 MAX_CLOUD_SPEED_FACTOR = 2.5
 CLOUD_MIN_ALPHA = 40
@@ -67,19 +75,21 @@ INDICATOR_WIDTH = 20
 INDICATOR_X_MARGIN = 20
 INDICATOR_Y_MARGIN_FROM_HUD = 20
 INDICATOR_COLOR = (50, 50, 80)
-VSI_ARROW_SIZE = 8 # Vertical Speed Indicator arrow size
+VSI_ARROW_SIZE = 8 
 
 # --- Game States ---
 STATE_START_SCREEN = 0
 STATE_PLAYING = 1
 STATE_GAME_OVER = 2
 STATE_LEVEL_COMPLETE = 3
-STATE_DIFFICULTY_SELECT = 4 # New state for difficulty selection
+STATE_DIFFICULTY_SELECT = 4 
 
 # --- Game Difficulty ---
-DIFFICULTY_NORMAL = 0
+DIFFICULTY_NOOB = 0    # New easiest mode
 DIFFICULTY_EASY = 1
+DIFFICULTY_NORMAL = 2
 game_difficulty = DIFFICULTY_NORMAL # Default
+difficulty_options_map = {0: "N00b", 1: "Easy", 2: "Normal"} # For display
 
 # --- Colors ---
 BLACK = (0, 0, 0); WHITE = (255, 255, 255); DARK_GRAY = (64, 64, 64)
@@ -89,17 +99,17 @@ BLUE = (0,0,255)
 CLOUD_COLOR = (220, 220, 240)
 HUD_PANEL_COLOR = (30, 30, 50, 200)
 
-COLOR_WATER_DEEP = (100, 149, 237) # Cornflower Blue for deep sea
-COLOR_WATER_SHALLOW = (135, 206, 235) # Sky Blue for shallow/coastal
-COLOR_PLAINS = (144, 238, 144)     # Light Green
-COLOR_GRASSLAND = (124, 252, 0)    # Lawn Green (more vibrant plains)
-COLOR_FOREST_TEMPERATE = (34, 139, 34) # Forest Green
-COLOR_FOREST_DENSE = (0, 100, 0)      # Dark Green for dense forests
-COLOR_MOUNTAIN_BASE = (160, 160, 160) # Grey for mountain slopes
-COLOR_MOUNTAIN_PEAK = (220, 220, 220) # Lighter Grey/Off-white for peaks
-COLOR_SAND_BEACH = (244, 214, 160) # Lighter sand for beaches
-COLOR_SAND_DESERT = (210, 180, 140) # Tan for deserts
-COLOR_RIVER = (100, 170, 250) # Slightly different blue for rivers
+COLOR_WATER_DEEP = (100, 149, 237) 
+COLOR_WATER_SHALLOW = (135, 206, 235) 
+COLOR_PLAINS = (144, 238, 144)     
+COLOR_GRASSLAND = (124, 252, 0)    
+COLOR_FOREST_TEMPERATE = (34, 139, 34) 
+COLOR_FOREST_DENSE = (0, 100, 0)      
+COLOR_MOUNTAIN_BASE = (160, 160, 160) 
+COLOR_MOUNTAIN_PEAK = (220, 220, 220) 
+COLOR_SAND_BEACH = (244, 214, 160) 
+COLOR_SAND_DESERT = (210, 180, 140) 
+COLOR_RIVER = (100, 170, 250) 
 
 GLIDER_BODY_COLOR = (100, 100, 230); GLIDER_WING_COLOR = (150, 150, 255)
 
@@ -112,8 +122,7 @@ INDICATOR_GROUND_COLOR = (100, 80, 60)
 VSI_CLIMB_COLOR = (0, 220, 0)
 VSI_SINK_COLOR = (220, 0, 0)
 
-# Map Tile Outline Color - Defined after DARK_GRAY is available
-MAP_TILE_OUTLINE_COLOR = DARK_GRAY # Color for tile outlines
+MAP_TILE_OUTLINE_COLOR = DARK_GRAY 
 
 
 # --- Land Types ---
@@ -129,11 +138,11 @@ LAND_TYPE_COLORS = {
     LandType.SAND_DESERT: COLOR_SAND_DESERT, LandType.SAND_BEACH: COLOR_SAND_BEACH,
     LandType.RIVER: COLOR_RIVER,
 }
-LAND_TYPE_THERMAL_PROBABILITY = { # Base probabilities, adjusted by features
+LAND_TYPE_THERMAL_PROBABILITY = { 
     LandType.WATER_DEEP: 0.00, LandType.WATER_SHALLOW: 0.01,
     LandType.PLAINS: 0.6, LandType.GRASSLAND: 0.7,
     LandType.FOREST_TEMPERATE: 0.3, LandType.FOREST_DENSE: 0.1,
-    LandType.MOUNTAIN_BASE: 0.5, LandType.MOUNTAIN_PEAK: 0.05, # Less on peaks
+    LandType.MOUNTAIN_BASE: 0.5, LandType.MOUNTAIN_PEAK: 0.05, 
     LandType.SAND_DESERT: 0.9, LandType.SAND_BEACH: 0.8,
     LandType.RIVER: 0.02,
 }
@@ -162,18 +171,18 @@ class Glider(pygame.sprite.Sprite):
         fin_tip_x = (fin_base_start_x + fin_base_end_x) / 2
         pygame.draw.polygon(self.original_image, GLIDER_BODY_COLOR, [(fin_base_start_x, fin_base_y), (fin_base_end_x, fin_base_y), (fin_tip_x, fin_tip_y)])
         self.image = self.original_image
-        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) # Centered on new screen size
+        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
         self.radius = min(self.rect.width, self.rect.height) / 3
         self.world_x = 0.0; self.world_y = 0.0
         self.heading = 0; self.bank_angle = 0
         self.height = INITIAL_HEIGHT; self.speed = INITIAL_SPEED
-        self.previous_height = INITIAL_HEIGHT # For VSI
-        self.vertical_speed = 0.0 # For VSI
+        self.previous_height = INITIAL_HEIGHT 
+        self.vertical_speed = 0.0 
         self.trail_points = []; self.contrail_frame_counter = 0
 
     def reset(self, start_height=INITIAL_HEIGHT):
         self.world_x = 0.0; self.world_y = 0.0
-        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2) # Centered on new screen size
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2) 
         self.heading = 0; self.bank_angle = 0
         self.height = start_height; self.speed = INITIAL_SPEED
         self.previous_height = start_height
@@ -183,7 +192,7 @@ class Glider(pygame.sprite.Sprite):
 
     def update(self, keys):
         global current_wind_speed_x, current_wind_speed_y
-        self.previous_height = self.height # Store height before changes
+        self.previous_height = self.height 
 
         if keys[pygame.K_UP]: self.speed += ACCELERATION
         elif keys[pygame.K_DOWN]:
@@ -194,7 +203,7 @@ class Glider(pygame.sprite.Sprite):
         self.speed = max(MIN_SPEED, min(self.speed, MAX_SPEED))
         if keys[pygame.K_LEFT]: self.bank_angle -= BANK_RATE
         elif keys[pygame.K_RIGHT]: self.bank_angle += BANK_RATE
-        else: self.bank_angle *= 0.95 # Auto-level
+        else: self.bank_angle *= 0.95 
         if abs(self.bank_angle) < 0.1: self.bank_angle = 0
         self.bank_angle = max(-MAX_BANK_ANGLE, min(self.bank_angle, MAX_BANK_ANGLE))
         turn_rate_degrees = self.bank_angle * TURN_RATE_SCALAR * (self.speed / INITIAL_SPEED)
@@ -203,7 +212,7 @@ class Glider(pygame.sprite.Sprite):
         self.world_x += self.speed * math.cos(heading_rad) + current_wind_speed_x
         self.world_y += self.speed * math.sin(heading_rad) + current_wind_speed_y
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
-        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) # Centered on new screen size
+        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)) 
         height_change_due_to_physics = 0
         if self.speed < STALL_SPEED:
             height_change_due_to_physics = -GRAVITY_BASE_PULL - STALL_SINK_PENALTY
@@ -212,10 +221,10 @@ class Glider(pygame.sprite.Sprite):
             net_vertical_force = lift_from_airspeed - GRAVITY_BASE_PULL
             height_change_due_to_physics = max(net_vertical_force, -MINIMUM_SINK_RATE) if net_vertical_force < 0 else net_vertical_force
         self.height += height_change_due_to_physics
-        if height_change_due_to_physics < 0: # Diving converts height to speed
+        if height_change_due_to_physics < 0: 
             self.speed = min(self.speed + abs(height_change_due_to_physics) * DIVE_TO_SPEED_FACTOR, MAX_SPEED)
         
-        self.vertical_speed = self.height - self.previous_height # Calculate VSI
+        self.vertical_speed = self.height - self.previous_height 
 
         self.contrail_frame_counter +=1
         if self.contrail_frame_counter >= CONTRAIL_POINT_DELAY:
@@ -230,11 +239,14 @@ class Glider(pygame.sprite.Sprite):
 
     def apply_lift_from_thermal(self, thermal_lift_power_at_nominal_speed):
         global game_difficulty
-        if self.speed < STALL_SPEED: return # No lift if stalled
+        if self.speed < STALL_SPEED: return 
         
         actual_lift_power = thermal_lift_power_at_nominal_speed
         if game_difficulty == DIFFICULTY_EASY:
             actual_lift_power *= EASY_MODE_THERMAL_LIFT_MULTIPLIER
+        elif game_difficulty == DIFFICULTY_NOOB:
+            actual_lift_power *= NOOB_MODE_THERMAL_LIFT_MULTIPLIER
+
 
         lift_this_frame = actual_lift_power * (INITIAL_SPEED / max(self.speed, MIN_SPEED * 0.5))
         self.height += max(lift_this_frame, actual_lift_power * 0.2)
@@ -248,17 +260,28 @@ class Glider(pygame.sprite.Sprite):
                 screen_px = world_point[0] - cam_x; screen_py = world_point[1] - cam_y
                 surface.blit(temp_surface, (screen_px - 2, screen_py - 2))
 
-# --- Thermal Class (Reintroduced) ---
+# --- Thermal Class ---
 class Thermal(pygame.sprite.Sprite):
     def __init__(self, world_center_pos):
         super().__init__()
+        global game_difficulty # Access game difficulty to set parameters
         self.world_pos = pygame.math.Vector2(world_center_pos)
-        self.radius = random.randint(MIN_THERMAL_RADIUS, MAX_THERMAL_RADIUS)
-        if MAX_THERMAL_RADIUS == MIN_THERMAL_RADIUS: normalized_radius = 0.5
-        else: normalized_radius = (self.radius - MIN_THERMAL_RADIUS) / (MAX_THERMAL_RADIUS - MIN_THERMAL_RADIUS)
-        self.lifespan = MIN_THERMAL_LIFESPAN + (MAX_THERMAL_LIFESPAN - MIN_THERMAL_LIFESPAN) * normalized_radius
+
+        min_r, max_r, min_l, max_l = NORMAL_MIN_THERMAL_RADIUS, NORMAL_MAX_THERMAL_RADIUS, NORMAL_MIN_THERMAL_LIFESPAN, NORMAL_MAX_THERMAL_LIFESPAN
+        if game_difficulty == DIFFICULTY_NOOB:
+            min_r, max_r, min_l, max_l = NOOB_MIN_THERMAL_RADIUS, NOOB_MAX_THERMAL_RADIUS, NOOB_MIN_THERMAL_LIFESPAN, NOOB_MAX_THERMAL_LIFESPAN
+        # Easy mode uses normal radius/lifespan, only lift is different
+
+        self.radius = random.randint(min_r, max_r)
+        if max_r == min_r: normalized_radius = 0.5 # Avoid division by zero if min=max
+        else: normalized_radius = (self.radius - min_r) / (max_r - min_r)
+        
+        self.lifespan = min_l + (max_l - min_l) * normalized_radius
         self.initial_lifespan = self.lifespan
+        
+        # Base lift power is determined by size, then multiplied by difficulty in Glider class
         self.lift_power = MAX_THERMAL_LIFT_POWER - (MAX_THERMAL_LIFT_POWER - MIN_THERMAL_LIFT_POWER) * normalized_radius
+        
         self.image = pygame.Surface([self.radius * 2, self.radius * 2], pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self.creation_time = pygame.time.get_ticks()
@@ -282,7 +305,7 @@ class Thermal(pygame.sprite.Sprite):
         self.rect.centerx = self.world_pos.x - cam_x
         self.rect.centery = self.world_pos.y - cam_y
 
-# --- ForegroundCloud Class (Screen-Space) ---
+# --- ForegroundCloud Class ---
 class ForegroundCloud(pygame.sprite.Sprite):
     def __init__(self, initial_distribution=False, index=0, total_clouds=1):
         super().__init__()
@@ -297,12 +320,10 @@ class ForegroundCloud(pygame.sprite.Sprite):
             pygame.draw.ellipse(self.image, (*CLOUD_COLOR, alpha), (puff_x, puff_y, puff_w, puff_h))
         self.speed_factor = random.uniform(MIN_CLOUD_SPEED_FACTOR, MAX_CLOUD_SPEED_FACTOR)
         self.dx = current_wind_speed_x * self.speed_factor; self.dy = current_wind_speed_y * self.speed_factor
-        
-        # Initial positioning (screen space), adjusted for larger screen
         if initial_distribution:
             self.x = (index/total_clouds)*SCREEN_WIDTH - self.width/2 + random.uniform(-SCREEN_WIDTH/(total_clouds*2), SCREEN_WIDTH/(total_clouds*2))
             self.y = random.randint(-self.height//2, SCREEN_HEIGHT - self.height//2)
-        else: # Spawn off-screen
+        else: 
             if self.dx == 0 and self.dy == 0:
                 start_x = random.choice([-self.width - 20, SCREEN_WIDTH + 20]) if random.choice([True,False]) else random.randint(-self.width, SCREEN_WIDTH)
                 start_y = random.randint(-self.height, SCREEN_HEIGHT) if start_x == random.choice([-self.width - 20, SCREEN_WIDTH + 20]) else random.choice([-self.height - 20, SCREEN_HEIGHT + 20])
@@ -332,7 +353,6 @@ class ForegroundCloud(pygame.sprite.Sprite):
 
 # --- Enhanced Endless Map Data & Functions ---
 map_tile_random_generator = random.Random()
-
 ELEVATION_CONTINENT_SCALE = 60.0 
 ELEVATION_MOUNTAIN_SCALE = 15.0  
 ELEVATION_HILL_SCALE = 5.0       
@@ -424,8 +444,8 @@ def get_land_type_at_world_pos(world_x, world_y):
 def draw_endless_map(surface, cam_x, cam_y):
     start_world_tile_x_coord = math.floor(cam_x / TILE_SIZE) * TILE_SIZE
     start_world_tile_y_coord = math.floor(cam_y / TILE_SIZE) * TILE_SIZE
-    num_tiles_x = SCREEN_WIDTH // TILE_SIZE + 2 # Adjusted for new screen width
-    num_tiles_y = SCREEN_HEIGHT // TILE_SIZE + 2 # Adjusted for new screen height
+    num_tiles_x = SCREEN_WIDTH // TILE_SIZE + 2 
+    num_tiles_y = SCREEN_HEIGHT // TILE_SIZE + 2 
     for i in range(num_tiles_y):
         for j in range(num_tiles_x):
             current_tile_world_x = start_world_tile_x_coord + j * TILE_SIZE
@@ -453,7 +473,7 @@ def draw_text(surface, text, size, x, y, color=WHITE, font_name=None, center=Fal
 # --- Pygame Setup ---
 pygame.init(); pygame.mixer.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Pastel Glider - World Explorer V2 (Fixed)")
+pygame.display.set_caption("Pastel Glider - N00b Mode")
 clock = pygame.time.Clock()
 
 # --- Game Objects & Variables ---
@@ -465,7 +485,7 @@ game_state = STATE_START_SCREEN
 current_level = 1; level_timer_start_ticks = 0; time_taken_for_level = 0
 current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE
 thermal_spawn_timer = 0; final_score = 0
-selected_difficulty_option = 0 
+selected_difficulty_option = 0 # Default to N00b for selection screen
 
 def generate_new_wind():
     global current_wind_speed_x, current_wind_speed_y
@@ -478,6 +498,13 @@ def start_new_level(level_num):
     global current_level,level_timer_start_ticks,current_thermal_spawn_rate,thermal_spawn_timer, game_state
     current_level=level_num; level_timer_start_ticks=pygame.time.get_ticks()
     current_thermal_spawn_rate = BASE_THERMAL_SPAWN_RATE + (THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL * (current_level -1))
+    # Adjust spawn rate based on difficulty (optional, N00b could have more frequent thermals)
+    if game_difficulty == DIFFICULTY_NOOB:
+        current_thermal_spawn_rate = max(20, current_thermal_spawn_rate // 2) # More frequent for n00b
+    elif game_difficulty == DIFFICULTY_EASY:
+        current_thermal_spawn_rate = max(30, int(current_thermal_spawn_rate * 0.75))
+
+
     thermal_spawn_timer=0; generate_new_wind()
     thermals_group.empty(); all_world_sprites.empty() 
     foreground_clouds_group.empty()
@@ -492,7 +519,7 @@ def reset_to_main_menu():
     foreground_clouds_group.empty()
     current_wind_speed_x = -0.2; current_wind_speed_y = 0.05 
     for i in range(NUM_FOREGROUND_CLOUDS): foreground_clouds_group.add(ForegroundCloud(initial_distribution=True,index=i,total_clouds=NUM_FOREGROUND_CLOUDS))
-    current_level=1; final_score=0; selected_difficulty_option = 0
+    current_level=1; final_score=0; selected_difficulty_option = 0 # Default to N00b on menu reset
     game_state = STATE_START_SCREEN
 
 # --- Screen Drawing Functions ---
@@ -505,14 +532,26 @@ def draw_start_screen_content(surface):
 
 def draw_difficulty_select_screen(surface, selected_option):
     surface.fill(DARK_GRAY)
-    draw_text(surface, "Select Difficulty", 56, SCREEN_WIDTH//2, SCREEN_HEIGHT//4, GOLD, center=True, shadow=True)
+    draw_text(surface, "Select Difficulty", 56, SCREEN_WIDTH//2, SCREEN_HEIGHT//5, GOLD, center=True, shadow=True) # Adjusted Y for more space
+    
+    option_spacing = 100
+    start_y = SCREEN_HEIGHT//2 - option_spacing # Adjusted start Y
+
+    noob_color = WHITE if selected_option == DIFFICULTY_NOOB else GRAY
     easy_color = WHITE if selected_option == DIFFICULTY_EASY else GRAY
     normal_color = WHITE if selected_option == DIFFICULTY_NORMAL else GRAY
-    draw_text(surface, "Easy", 48, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 30, easy_color, center=True, shadow=True)
-    draw_text(surface, "(Stronger Thermals)", 20, SCREEN_WIDTH//2, SCREEN_HEIGHT//2, easy_color, center=True)
-    draw_text(surface, "Normal", 48, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 70, normal_color, center=True, shadow=True)
-    draw_text(surface, "(Standard Challenge)", 20, SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 100, normal_color, center=True)
-    draw_text(surface, "Use UP/DOWN keys, ENTER to confirm", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT*3//4 + 50, LIGHT_GRAY, center=True)
+
+    draw_text(surface, "N00b", 48, SCREEN_WIDTH//2, start_y, noob_color, center=True, shadow=True)
+    draw_text(surface, "(Largest, Longest, Strongest Thermals!)", 20, SCREEN_WIDTH//2, start_y + 30, noob_color, center=True)
+
+    draw_text(surface, "Easy", 48, SCREEN_WIDTH//2, start_y + option_spacing, easy_color, center=True, shadow=True)
+    draw_text(surface, "(Stronger Thermals)", 20, SCREEN_WIDTH//2, start_y + option_spacing + 30, easy_color, center=True)
+
+    draw_text(surface, "Normal", 48, SCREEN_WIDTH//2, start_y + option_spacing*2, normal_color, center=True, shadow=True)
+    draw_text(surface, "(Standard Challenge)", 20, SCREEN_WIDTH//2, start_y + option_spacing*2 + 30, normal_color, center=True)
+
+    draw_text(surface, "Use UP/DOWN keys, ENTER to confirm", 22, SCREEN_WIDTH//2, SCREEN_HEIGHT*0.85, LIGHT_GRAY, center=True)
+
 
 def draw_level_complete_screen(surface, level, time_taken_seconds_val):
     surface.fill(DARK_GRAY); draw_text(surface, f"Level {level} Complete!", 60, SCREEN_WIDTH//2, SCREEN_HEIGHT//3, GOLD, center=True, shadow=True)
@@ -527,7 +566,7 @@ def draw_game_over_screen_content(surface, score, level):
 
 def draw_height_indicator_hud(surface, current_player_height, target_h, vertical_speed_val):
     indicator_bar_height = SCREEN_HEIGHT - HUD_HEIGHT - (2 * INDICATOR_Y_MARGIN_FROM_HUD)
-    indicator_x_pos = SCREEN_WIDTH - INDICATOR_WIDTH - INDICATOR_X_MARGIN # Adjusted for larger screen
+    indicator_x_pos = SCREEN_WIDTH - INDICATOR_WIDTH - INDICATOR_X_MARGIN 
     indicator_y_pos = HUD_HEIGHT + INDICATOR_Y_MARGIN_FROM_HUD
     pygame.draw.rect(surface, INDICATOR_COLOR, (indicator_x_pos, indicator_y_pos, INDICATOR_WIDTH, indicator_bar_height))
     max_indicator_height_value = target_h * 1.15 
@@ -595,10 +634,12 @@ while running:
             if game_state == STATE_START_SCREEN:
                 if event.key == pygame.K_RETURN: game_state = STATE_DIFFICULTY_SELECT
             elif game_state == STATE_DIFFICULTY_SELECT:
-                if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
-                    selected_difficulty_option = 1 - selected_difficulty_option 
+                if event.key == pygame.K_UP:
+                    selected_difficulty_option = (selected_difficulty_option - 1 + 3) % 3 # Cycle up through 3 options
+                elif event.key == pygame.K_DOWN:
+                    selected_difficulty_option = (selected_difficulty_option + 1) % 3 # Cycle down through 3 options
                 elif event.key == pygame.K_RETURN:
-                    game_difficulty = selected_difficulty_option
+                    game_difficulty = selected_difficulty_option # N00b=0, Easy=1, Normal=2
                     start_new_level(1) 
             elif game_state == STATE_PLAYING:
                 if event.key == pygame.K_ESCAPE: reset_to_main_menu()
@@ -656,7 +697,7 @@ while running:
         draw_text(screen, f"Height: {int(player.height)}m", 20, hud_margin, current_y_hud, text_color_on_hud)
         draw_text(screen, f"Speed: {player.speed:.1f}", 20, hud_margin + 120, current_y_hud, text_color_on_hud)
         if player.speed < STALL_SPEED: draw_text(screen, "STALL!", 24, SCREEN_WIDTH//2, hud_margin + line_spacing//2, RED, center=True, shadow=True)
-        wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"; wind_text_x_pos = SCREEN_WIDTH - 220 # Adjusted for larger screen
+        wind_display_text = f"Wind: <{current_wind_speed_x*10:.0f}, {current_wind_speed_y*10:.0f}>"; wind_text_x_pos = SCREEN_WIDTH - 220 
         draw_text(screen, wind_display_text, 18, wind_text_x_pos, hud_margin + 5, text_color_on_hud)
         draw_text(screen, "ESC for Menu", 18, wind_text_x_pos, hud_margin + 5 + line_spacing, text_color_on_hud)
         draw_weather_vane(screen, current_wind_speed_x, current_wind_speed_y, wind_text_x_pos + 150, hud_margin + 25)
