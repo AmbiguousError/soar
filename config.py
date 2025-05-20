@@ -37,13 +37,25 @@ GLIDER_COLLISION_RADIUS = 20
 NUM_AI_OPPONENTS = 3
 AI_TARGET_RACE_ALTITUDE = 450
 AI_ALTITUDE_CORRECTION_RATE = 0.2
-AI_SPEED_MIN = 2.5
-AI_SPEED_MAX = 4.5
-AI_TURN_RATE_SCALAR = 0.08
+AI_BASE_SPEED_MIN = 2.5 # Base min speed for AI
+AI_BASE_SPEED_MAX = 4.5 # Base max speed for AI
+AI_BASE_TURN_RATE_SCALAR = 0.08 # Base turn agility
 AI_MARKER_APPROACH_SLOWDOWN_DISTANCE = 200
 AI_MARKER_APPROACH_MIN_SPEED_FACTOR = 0.6
 AI_TARGET_SPEED_UPDATE_INTERVAL = 120 
 AI_SPEED_VARIATION_FACTOR = 0.2 
+AI_STRAIGHT_BOOST_THRESHOLD_ANGLE = 15 # Degrees: if angle_diff is less, consider it straight
+AI_STRAIGHT_BOOST_MIN_DISTANCE = 400  # World units: min distance to marker for boost
+
+# AI Colors (Body, Wing)
+AI_GLIDER_COLORS_LIST = [
+    ((250, 180, 180), (255, 200, 200)), # Default Reddish
+    ((180, 250, 180), (200, 255, 200)), # Greenish
+    ((180, 180, 250), (200, 200, 255)), # Bluish (Player-like, ensure distinct)
+    ((250, 250, 180), (255, 255, 200)), # Yellowish
+    ((200, 200, 200), (220, 220, 220)), # Grayish
+]
+
 
 # --- Contrail ---
 CONTRAIL_LENGTH = 60
@@ -92,7 +104,6 @@ RACE_COURSE_AREA_HALFWIDTH = 2500
 
 # --- Wind ---
 MAX_WIND_STRENGTH = 1.0
-# These will be updated by game_state_manager and accessed by sprites if needed
 current_wind_speed_x = 0.0 
 current_wind_speed_y = 0.0
 
@@ -139,14 +150,12 @@ DIFFICULTY_NOOB = 0
 DIFFICULTY_EASY = 1
 DIFFICULTY_NORMAL = 2
 difficulty_options_map = {0: "N00b", 1: "Easy", 2: "Normal"}
-# This will be updated by game_state_manager based on player selection
 game_difficulty = DIFFICULTY_NORMAL 
 
 
 # --- Game Mode ---
 MODE_FREE_FLY = 0
 MODE_RACE = 1
-# This will be updated by game_state_manager based on player selection
 current_game_mode = MODE_FREE_FLY 
 
 # --- Pastel Colors ---
@@ -175,10 +184,9 @@ PASTEL_MOUNTAIN_PEAK = (235, 235, 240)
 PASTEL_SAND_BEACH = (250, 240, 210)
 PASTEL_SAND_DESERT = (245, 230, 200)
 PASTEL_RIVER = (200, 225, 250)
-PASTEL_GLIDER_BODY = (180, 180, 250)
-PASTEL_GLIDER_WING = (200, 200, 255)
-PASTEL_AI_GLIDER_BODY = (250, 180, 180)
-PASTEL_AI_GLIDER_WING = (255, 200, 200)
+PASTEL_GLIDER_BODY = (180, 180, 250) # Player default
+PASTEL_GLIDER_WING = (200, 200, 255) # Player default
+# AI_GLIDER_BODY and AI_GLIDER_WING are now superseded by AI_GLIDER_COLORS_LIST
 PASTEL_THERMAL_PRIMARY = (255, 200, 200)
 PASTEL_THERMAL_ACCENT = PASTEL_WHITE
 PASTEL_INDICATOR_COLOR = (150, 160, 170)
@@ -231,3 +239,4 @@ P_HILL = (39119077, 66826529)
 P_MOIST_P = (23109781, 92953093)
 P_MOIST_S = (47834583, 11634271)
 NUM_MAJOR_RIVERS = 3
+ 

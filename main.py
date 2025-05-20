@@ -2,8 +2,8 @@
 # Main game script for Pastel Glider. Orchestrates game flow.
 
 import pygame
-import math # Keep for HUD calculations if any remain here, or move to ui.py
-import random # Keep for now, might be used for minor main-loop specific randomness
+import math 
+import random 
 
 import config 
 from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud 
@@ -12,7 +12,7 @@ from ui import (draw_text, Minimap, draw_height_indicator_hud, draw_dial, draw_w
                 draw_start_screen_content, draw_difficulty_select_screen, draw_mode_select_screen,
                 draw_laps_select_screen, draw_target_reached_options_screen, draw_post_goal_menu_screen,
                 draw_pause_menu_screen, draw_race_complete_screen, draw_game_over_screen_content)
-import game_state_manager as gsm # Import the new game state manager
+import game_state_manager as gsm 
 
 # --- Pygame Setup ---
 pygame.init()
@@ -21,8 +21,9 @@ screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
 pygame.display.set_caption("Pastel Glider - Floating Dreams")
 clock = pygame.time.Clock()
 
-# --- Game Objects (instantiated once, managed by game_state_manager) ---
-# Note: player, sprite groups etc. are now inside game_state_manager.py
+# --- Initial Camera Position (will be updated in the loop) ---
+camera_x_current = 0.0 
+camera_y_current = 0.0
 
 # --- Game Loop ---
 running = True
@@ -39,7 +40,7 @@ while running:
                 if event.key == pygame.K_c: 
                     time_spent_paused = pygame.time.get_ticks() - gsm.pause_start_ticks
                     gsm.level_timer_start_ticks += time_spent_paused
-                    gsm.player.current_lap_start_ticks += time_spent_paused # Access player via gsm
+                    gsm.player.current_lap_start_ticks += time_spent_paused 
                     gsm.current_session_flight_start_ticks += time_spent_paused
                     gsm.game_state = gsm.game_state_before_pause
                 elif event.key == pygame.K_q:
@@ -97,16 +98,29 @@ while running:
                     gsm.reset_to_main_menu()
 
     # --- Updates ---
-    camera_x_current, camera_y_current = gsm.player.world_x, gsm.player.world_y # Default camera if not updated
     if gsm.game_state not in (config.STATE_PAUSED, config.STATE_START_SCREEN, config.STATE_DIFFICULTY_SELECT, 
                            config.STATE_MODE_SELECT, config.STATE_RACE_LAPS_SELECT, config.STATE_TARGET_REACHED_OPTIONS, 
                            config.STATE_POST_GOAL_MENU, config.STATE_RACE_COMPLETE, config.STATE_GAME_OVER):
-        camera_x_current, camera_y_current = gsm.update_game_logic(keys) # This now returns camera positions
+        camera_x_current, camera_y_current = gsm.update_game_logic(keys)
     
     # --- Drawing ---
     screen.fill(config.PASTEL_BLACK)
     
     if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_TARGET_REACHED_CONTINUE_PLAYING, config.STATE_RACE_PLAYING, config.STATE_PAUSED):
+        # If paused, use the last known camera position, otherwise it's updated by update_game_logic
+        # For the very first frame of a gameplay state, camera_x_current might still be 0,0
+        # but it will be immediately updated by the first call to update_game_logic.
+        # If drawing occurs before update_game_logic in the first frame, it might use the default 0,0.
+        # This is generally fine as it's a momentary state.
+        # To be extremely robust, one could initialize camera_x_current based on player start after start_new_level.
+        # For now, this structure should work.
+        
+        # Ensure camera is based on player if game is active, otherwise keep last known for pause
+        if gsm.game_state != config.STATE_PAUSED:
+             camera_x_current = gsm.player.world_x - config.SCREEN_WIDTH // 2
+             camera_y_current = gsm.player.world_y - config.SCREEN_HEIGHT // 2
+
+
         draw_endless_map(screen, camera_x_current, camera_y_current, gsm.current_map_offset_x, gsm.current_map_offset_y, gsm.tile_type_cache)
         gsm.player.draw_contrail(screen, camera_x_current, camera_y_current)
         for ags in gsm.ai_gliders:
@@ -164,7 +178,7 @@ while running:
         elif gsm.game_state == config.STATE_PLAYING_FREE_FLY or gsm.game_state == config.STATE_RACE_PLAYING: et = "ESC to Pause"
         draw_text(screen, et, config.HUD_FONT_SIZE_SMALL, config.SCREEN_WIDTH - 150, config.SCREEN_HEIGHT - 30, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True) 
         
-        draw_height_indicator_hud(screen, gsm.player.height, config.TARGET_HEIGHT_PER_LEVEL * gsm.current_level if config.current_game_mode == config.MODE_FREE_FLY else gsm.player.height + 100, gsm.player.vertical_speed, clock)
+        draw_height_indicator_hud(screen, gsm.player.height, config.TARGET_HEIGHT_PER_LEVEL * gsm.current_level if config.current_game_mode == config.MODE_FREE_FLY else gsm.player.height + 100, gsm.player.vertical_speed, clock, config.current_game_mode)
         
         if config.current_game_mode == config.MODE_RACE and (gsm.game_state == config.STATE_RACE_PLAYING or gsm.game_state == config.STATE_RACE_COMPLETE or gsm.game_state == config.STATE_PAUSED):
             gsm.minimap.draw(screen, gsm.player, gsm.ai_gliders, gsm.race_course_markers)

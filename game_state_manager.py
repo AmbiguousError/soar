@@ -10,13 +10,16 @@ from map_generation import regenerate_river_parameters, get_land_type_at_world_p
 from ui import Minimap # Ensure Minimap is imported from ui
 
 # --- Game Variables (managed by this module) ---
+# These are defined at the module level to be accessible via gsm.<variable_name>
+
+game_state = config.STATE_START_SCREEN # Crucial global variable
+
 player = PlayerGlider() 
 ai_gliders = pygame.sprite.Group() 
 all_world_sprites = pygame.sprite.Group() 
 thermals_group = pygame.sprite.Group()    
 foreground_clouds_group = pygame.sprite.Group() 
 
-game_state = config.STATE_START_SCREEN
 current_level = 1
 level_timer_start_ticks = 0 
 time_taken_for_level = 0.0  
@@ -25,11 +28,9 @@ thermal_spawn_timer = 0
 final_score = 0 
 
 selected_difficulty_option = config.DIFFICULTY_NORMAL 
-config.game_difficulty = selected_difficulty_option 
-
+# config.game_difficulty is updated directly in main.py based on this, then used by other modules
 selected_mode_option = config.MODE_FREE_FLY
-config.current_game_mode = selected_mode_option 
-
+# config.current_game_mode is updated directly in main.py based on this
 selected_laps_option = 1 
 lap_options = [1, 3, 5] 
 total_race_laps = config.DEFAULT_RACE_LAPS 
@@ -54,7 +55,7 @@ pause_start_ticks = 0
 current_session_flight_start_ticks = 0 
 
 # UI Instances
-minimap = Minimap(config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT, config.MINIMAP_MARGIN) # Added Minimap instantiation
+minimap = Minimap(config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT, config.MINIMAP_MARGIN)
 
 # --- Core Game Logic Functions ---
 def generate_race_course(num_markers=8):
@@ -101,7 +102,6 @@ def start_new_level(level_param):
     current_session_flight_start_ticks = pygame.time.get_ticks()
     player_race_lap_times.clear()
 
-
     if config.current_game_mode == config.MODE_FREE_FLY: 
         current_level = level_param
         current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE + (config.THERMAL_SPAWN_RATE_INCREASE_PER_LEVEL * (current_level - 1))
@@ -115,11 +115,20 @@ def start_new_level(level_param):
         total_race_laps = level_param 
         generate_race_course() 
         for i in range(config.NUM_AI_OPPONENTS):
-            angle_offset = math.pi + (i - config.NUM_AI_OPPONENTS / 2.0) * (math.pi / 6)
-            dist_offset = 70 + i * 30 
-            ai_start_x = player.world_x + dist_offset * math.cos(math.radians(player.heading) + angle_offset)
-            ai_start_y = player.world_y + dist_offset * math.sin(math.radians(player.heading) + angle_offset)
-            new_ai = AIGlider(ai_start_x, ai_start_y)
+            angle_offset = math.pi + (i - config.NUM_AI_OPPONENTS / 2.0) * (math.pi / 6) # Spread more behind/sides
+            dist_offset = 100 + i * 40 # Increase starting distance and stagger
+            
+            ai_start_x = player.world_x + dist_offset * math.cos(angle_offset + math.radians(player.heading)) 
+            ai_start_y = player.world_y + dist_offset * math.sin(angle_offset + math.radians(player.heading))
+
+            body_color, wing_color = config.AI_GLIDER_COLORS_LIST[i % len(config.AI_GLIDER_COLORS_LIST)]
+            
+            profile = {
+                "speed_factor": random.uniform(0.9, 1.1), 
+                "turn_factor": random.uniform(0.85, 1.15), 
+                "altitude_offset": random.uniform(-20, 20) 
+            }
+            new_ai = AIGlider(ai_start_x, ai_start_y, body_color, wing_color, profile)
             ai_gliders.add(new_ai)
             all_world_sprites.add(new_ai) 
         current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE * 1.5 

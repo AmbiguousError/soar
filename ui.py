@@ -48,14 +48,15 @@ class Minimap:
         mini_y = self.height / 2 + rel_y * scale
         return int(mini_x), int(mini_y)
 
-    def draw(self, surface, player_glider, ai_gliders_list, course_markers): # Pass font_cache
+    def draw(self, surface, player_glider, ai_gliders_list, course_markers):
         self.surface.fill(config.PASTEL_MINIMAP_BACKGROUND)
         player_mini_x, player_mini_y = self.width // 2, self.height // 2
         pygame.draw.circle(self.surface, config.PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
-        for ai in ai_gliders_list:
+        for ai in ai_gliders_list: # ai is an AIGlider instance
             ai_mini_x, ai_mini_y = self.world_to_minimap(ai.world_x, ai.world_y, player_glider.world_x, player_glider.world_y)
             if 0 <= ai_mini_x <= self.width and 0 <= ai_mini_y <= self.height:
-                pygame.draw.circle(self.surface, config.PASTEL_AI_GLIDER_BODY, (ai_mini_x, ai_mini_y), 4)
+                 # Use the AI's specific body color for its dot on the minimap
+                 pygame.draw.circle(self.surface, ai.body_color, (ai_mini_x, ai_mini_y), 4) 
         for i, marker_obj in enumerate(course_markers):
             mini_x, mini_y = self.world_to_minimap(marker_obj.world_pos.x, marker_obj.world_pos.y, player_glider.world_x, player_glider.world_y)
             if 0 <= mini_x <= self.width and 0 <= mini_y <= self.height:
@@ -64,27 +65,27 @@ class Minimap:
                     color_to_use = config.PASTEL_ACTIVE_MARKER_COLOR
                 
                 pygame.draw.circle(self.surface, color_to_use, (mini_x, mini_y), config.RACE_MARKER_VISUAL_RADIUS_MAP)
-                font_obj = get_cached_font(None, 16) # Using default font for minimap numbers
+                font_obj = get_cached_font(None, 16) 
                 text_surf = font_obj.render(str(marker_obj.number), True, config.PASTEL_BLACK)
                 text_rect = text_surf.get_rect(center=(mini_x, mini_y))
                 self.surface.blit(text_surf, text_rect)
         pygame.draw.rect(self.surface, config.PASTEL_MINIMAP_BORDER, self.surface.get_rect(), 2)
         surface.blit(self.surface, self.rect)
 
-def draw_height_indicator_hud(surface, current_player_height, target_h_for_level, vertical_speed_val, clock_ref): # Pass clock
+def draw_height_indicator_hud(surface, current_player_height, target_h_for_level, vertical_speed_val, clock_ref, current_game_mode_param):
     indicator_bar_height = config.SCREEN_HEIGHT - config.HUD_HEIGHT - (2 * config.INDICATOR_Y_MARGIN_FROM_HUD)
     indicator_x_pos = config.SCREEN_WIDTH - config.INDICATOR_WIDTH - config.INDICATOR_X_MARGIN
     indicator_y_pos = config.HUD_HEIGHT + config.INDICATOR_Y_MARGIN_FROM_HUD
     pygame.draw.rect(surface, config.PASTEL_INDICATOR_COLOR, (indicator_x_pos, indicator_y_pos, config.INDICATOR_WIDTH, indicator_bar_height))
     
-    max_indicator_height_value = target_h_for_level * 1.15 if config.current_game_mode == config.MODE_FREE_FLY else current_player_height + 500 # Needs current_game_mode
+    max_indicator_height_value = target_h_for_level * 1.15 if current_game_mode_param == config.MODE_FREE_FLY else current_player_height + 500
     max_indicator_height_value = max(1, max_indicator_height_value) 
     
     ground_line_y = indicator_y_pos + indicator_bar_height
     pygame.draw.line(surface, config.PASTEL_INDICATOR_GROUND, (indicator_x_pos - 5, ground_line_y), (indicator_x_pos + config.INDICATOR_WIDTH + 5, ground_line_y), 3)
     draw_text(surface, "0m", 14, indicator_x_pos + config.INDICATOR_WIDTH + 8, ground_line_y - 7, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
     
-    if config.current_game_mode == config.MODE_FREE_FLY and target_h_for_level > 0: # Needs current_game_mode
+    if current_game_mode_param == config.MODE_FREE_FLY and target_h_for_level > 0:
         target_ratio = min(target_h_for_level / max_indicator_height_value, 1.0) 
         target_marker_y_on_bar = indicator_y_pos + indicator_bar_height * (1 - target_ratio) 
         pygame.draw.line(surface, config.PASTEL_GREEN_TARGET, (indicator_x_pos - 5, target_marker_y_on_bar), (indicator_x_pos + config.INDICATOR_WIDTH + 5, target_marker_y_on_bar), 3)
@@ -225,7 +226,7 @@ def draw_pause_menu_screen(surface):
     draw_text(surface, "Press C to Continue", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): # Pass lap_times_list
+def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 40, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
@@ -235,7 +236,7 @@ def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): # Pa
             draw_text(surface, f"Lap {i+1}: {lap_time:.1f}s", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 55 + (i * 28), config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press ENTER for Main Menu", 32, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 5 // 6, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-def draw_game_over_screen_content(surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): # Pass necessary data
+def draw_game_over_screen_content(surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "GAME OVER", 72, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     y_offset = config.SCREEN_HEIGHT // 2 - 80 

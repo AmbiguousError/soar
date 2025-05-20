@@ -10,6 +10,9 @@ import config # Import constants
 class GliderBase(pygame.sprite.Sprite):
     def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0):
         super().__init__()
+        self.body_color = body_color # Ensure this line is present and correct
+        self.wing_color = wing_color 
+
         self.fuselage_length = config.GLIDER_COLLISION_RADIUS * 2.25 
         self.fuselage_thickness = config.GLIDER_COLLISION_RADIUS * 0.2
         self.wing_span = config.GLIDER_COLLISION_RADIUS * 3.5
@@ -31,15 +34,15 @@ class GliderBase(pygame.sprite.Sprite):
         self.original_image = pygame.Surface([int(canvas_width), int(canvas_height)], pygame.SRCALPHA)
         
         fuselage_y_top = (canvas_height - self.fuselage_thickness) / 2
-        pygame.draw.rect(self.original_image, body_color, (0, fuselage_y_top, self.fuselage_length, self.fuselage_thickness))
+        pygame.draw.rect(self.original_image, self.body_color, (0, fuselage_y_top, self.fuselage_length, self.fuselage_thickness))
         
         wing_x_pos = (self.fuselage_length - self.wing_chord) * 0.65 
         wing_y_pos = (canvas_height - self.wing_span) / 2 
-        pygame.draw.rect(self.original_image, wing_color, (wing_x_pos, wing_y_pos, self.wing_chord, self.wing_span))
+        pygame.draw.rect(self.original_image, self.wing_color, (wing_x_pos, wing_y_pos, self.wing_chord, self.wing_span))
         
         tail_plane_x_pos = 0 
         tail_plane_y_top = (canvas_height - self.tail_plane_span) / 2
-        pygame.draw.rect(self.original_image, wing_color, (tail_plane_x_pos, tail_plane_y_top, self.tail_plane_chord, self.tail_plane_span))
+        pygame.draw.rect(self.original_image, self.wing_color, (tail_plane_x_pos, tail_plane_y_top, self.tail_plane_chord, self.tail_plane_span))
         
         fin_base_y_center = fuselage_y_top + self.fuselage_thickness / 2 
         fin_bottom_y = fin_base_y_center - self.fuselage_thickness / 2 
@@ -47,7 +50,7 @@ class GliderBase(pygame.sprite.Sprite):
         fin_leading_edge_x = tail_plane_x_pos + self.tail_plane_chord * 0.2
         fin_trailing_edge_x = tail_plane_x_pos + self.tail_plane_chord * 0.8
         fin_tip_x = tail_plane_x_pos + self.tail_plane_chord * 0.5
-        pygame.draw.polygon(self.original_image, body_color, [
+        pygame.draw.polygon(self.original_image, self.body_color, [
             (fin_leading_edge_x, fin_bottom_y), (fin_trailing_edge_x, fin_bottom_y), (fin_tip_x, fin_tip_y)
         ])
         
@@ -129,7 +132,6 @@ class PlayerGlider(GliderBase):
         self.contrail_frame_counter = 0
         self.current_target_marker_index = 0
         self.laps_completed = 0
-        # self.current_lap_start_ticks is reset in game_state_manager's start_new_level or reset_to_main_menu
         self.update_sprite_rotation_and_position() 
 
     def update(self, keys, game_data): 
@@ -139,10 +141,9 @@ class PlayerGlider(GliderBase):
         race_course_markers = game_data["race_course_markers"]
         total_race_laps = game_data["total_race_laps"]
         level_timer_start_ticks = game_data["level_timer_start_ticks"]
-        game_difficulty = game_data["game_difficulty"] # This is now correctly passed
+        game_difficulty = game_data["game_difficulty"] 
         high_scores = game_data["high_scores"]
-        # player_race_lap_times is modified directly in game_data dictionary by main logic
-
+        
         self.previous_height = self.height
 
         if game_data["current_game_mode"] == config.MODE_FREE_FLY and self.height > high_scores["max_altitude_free_fly"]:
@@ -237,12 +238,26 @@ class PlayerGlider(GliderBase):
 
 # --- AI Glider Class ---
 class AIGlider(GliderBase):
-    def __init__(self, start_world_x, start_world_y):
-        super().__init__(config.PASTEL_AI_GLIDER_BODY, config.PASTEL_AI_GLIDER_WING, start_world_x, start_world_y)
-        self.speed = random.uniform(config.AI_SPEED_MIN, config.AI_SPEED_MAX)
-        self.height = config.AI_TARGET_RACE_ALTITUDE + random.uniform(-50, 50) 
-        self.target_speed = self.speed 
+    def __init__(self, start_world_x, start_world_y, body_color, wing_color, personality_profile=None):
+        super().__init__(body_color, wing_color, start_world_x, start_world_y) # body_color is passed to GliderBase
+        
+        self.personality = personality_profile if personality_profile else {}
+        self.speed_factor = self.personality.get("speed_factor", 1.0)
+        self.turn_factor = self.personality.get("turn_factor", 1.0)
+        self.altitude_offset = self.personality.get("altitude_offset", 0)
+
+        self.ai_min_speed = config.AI_BASE_SPEED_MIN * self.speed_factor
+        self.ai_max_speed = config.AI_BASE_SPEED_MAX * self.speed_factor
+        self.ai_turn_rate_scalar = config.AI_BASE_TURN_RATE_SCALAR * self.turn_factor
+        self.ai_target_altitude = config.AI_TARGET_RACE_ALTITUDE + self.altitude_offset
+
+
+        self.speed = random.uniform(self.ai_min_speed, self.ai_max_speed)
+        self.height = self.ai_target_altitude + random.uniform(-50, 50) 
+        self.base_target_speed = random.uniform(self.ai_min_speed, self.ai_max_speed) 
+        self.target_speed = self.base_target_speed
         self.speed_update_timer = random.randint(0, config.AI_TARGET_SPEED_UPDATE_INTERVAL // 2)
+
 
     def update(self, cam_x, cam_y, race_markers_list, total_laps_in_race, current_game_state):
         if not race_markers_list or current_game_state != config.STATE_RACE_PLAYING: 
@@ -262,31 +277,34 @@ class AIGlider(GliderBase):
         angle_diff = target_angle_deg - current_heading_deg
         if angle_diff > 180: angle_diff -= 360
         if angle_diff < -180: angle_diff += 360
-        self.heading = (self.heading + (angle_diff * config.AI_TURN_RATE_SCALAR)) % 360
+        self.heading = (self.heading + (angle_diff * self.ai_turn_rate_scalar)) % 360
         
         if dist_to_marker < config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE:
-            self.target_speed = config.AI_SPEED_MIN + (config.AI_SPEED_MAX - config.AI_SPEED_MIN) * \
+            self.target_speed = self.ai_min_speed + (self.ai_max_speed - self.ai_min_speed) * \
                                 (dist_to_marker / config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE) * \
                                 config.AI_MARKER_APPROACH_MIN_SPEED_FACTOR
-            self.target_speed = max(config.AI_SPEED_MIN * 0.8, self.target_speed)
-            self.speed_update_timer = 0
+            self.target_speed = max(self.ai_min_speed * 0.8, self.target_speed) 
+            self.speed_update_timer = 0 
+        elif dist_to_marker > config.AI_STRAIGHT_BOOST_MIN_DISTANCE and abs(angle_diff) < config.AI_STRAIGHT_BOOST_THRESHOLD_ANGLE:
+            self.target_speed = self.ai_max_speed 
+            self.speed_update_timer = 0 
         else:
             self.speed_update_timer += 1
             if self.speed_update_timer >= config.AI_TARGET_SPEED_UPDATE_INTERVAL:
-                speed_range = config.AI_SPEED_MAX - config.AI_SPEED_MIN
+                speed_range = self.ai_max_speed - self.ai_min_speed
                 random_variation = random.uniform(-speed_range * config.AI_SPEED_VARIATION_FACTOR, 
                                                  speed_range * config.AI_SPEED_VARIATION_FACTOR)
-                self.target_speed = self.speed + random_variation
-                self.target_speed = max(config.AI_SPEED_MIN, min(self.target_speed, config.AI_SPEED_MAX))
+                self.target_speed = self.base_target_speed + random_variation 
+                self.target_speed = max(self.ai_min_speed, min(self.target_speed, self.ai_max_speed))
                 self.speed_update_timer = 0
 
         if self.speed < self.target_speed: 
             self.speed += config.ACCELERATION * 0.5 
         elif self.speed > self.target_speed: 
             self.speed -= config.ACCELERATION * 0.5
-        self.speed = max(config.AI_SPEED_MIN * 0.7, min(self.speed, config.AI_SPEED_MAX * 1.1)) 
+        self.speed = max(self.ai_min_speed * 0.7, min(self.speed, self.ai_max_speed * 1.1)) 
         
-        alt_diff = config.AI_TARGET_RACE_ALTITUDE - self.height
+        alt_diff = self.ai_target_altitude - self.height 
         self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE 
         if self.height < 0: 
             self.height = 0 
@@ -306,7 +324,7 @@ class AIGlider(GliderBase):
 
 # --- Thermal Class ---
 class Thermal(pygame.sprite.Sprite):
-    def __init__(self, world_center_pos, game_difficulty_param): # Pass game_difficulty
+    def __init__(self, world_center_pos, game_difficulty_param):
         super().__init__()
         self.world_pos = pygame.math.Vector2(world_center_pos)
         min_r, max_r, min_l, max_l = config.NORMAL_MIN_THERMAL_RADIUS, config.NORMAL_MAX_THERMAL_RADIUS, config.NORMAL_MIN_THERMAL_LIFESPAN, config.NORMAL_MAX_THERMAL_LIFESPAN
@@ -314,8 +332,7 @@ class Thermal(pygame.sprite.Sprite):
         if game_difficulty_param == config.DIFFICULTY_NOOB:
             min_r, max_r, min_l, max_l = config.NOOB_MIN_THERMAL_RADIUS, config.NOOB_MAX_THERMAL_RADIUS, config.NOOB_MIN_THERMAL_LIFESPAN, config.NOOB_MAX_THERMAL_LIFESPAN
         elif game_difficulty_param == config.DIFFICULTY_EASY: 
-            # Assuming Easy uses Normal radius/lifespan but gets lift multiplier in PlayerGlider
-            pass # Or define specific Easy params in config.py
+            pass 
 
         self.radius = random.randint(min_r, max_r)
         normalized_radius = 0.5 if max_r == min_r else (self.radius - min_r) / (max_r - min_r)
@@ -369,7 +386,6 @@ class RaceMarker(pygame.sprite.Sprite):
         pygame.draw.circle(self.image, color_to_use, (self.visual_radius, self.visual_radius), self.visual_radius)
         pygame.draw.circle(self.image, config.PASTEL_WHITE, (self.visual_radius, self.visual_radius), int(self.visual_radius * 0.7))
         
-        # Using pygame.font.Font directly here, or pass get_cached_font from ui.py
         font_obj = pygame.font.Font(None, int(self.visual_radius * 1.1)) 
         text_surf = font_obj.render(str(self.number), True, config.PASTEL_BLACK)
         text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
@@ -384,7 +400,6 @@ class RaceMarker(pygame.sprite.Sprite):
 class ForegroundCloud(pygame.sprite.Sprite):
     def __init__(self, initial_distribution=False, index=0, total_clouds=config.NUM_FOREGROUND_CLOUDS):
         super().__init__()
-        # Wind speeds are now read from config, which should be updated by game_state_manager
         self.width = random.randint(100, 250)
         self.height = random.randint(40, 80)
         self.image = pygame.Surface([self.width, self.height], pygame.SRCALPHA)
@@ -394,8 +409,8 @@ class ForegroundCloud(pygame.sprite.Sprite):
             pygame.draw.ellipse(self.image, (*config.PASTEL_CLOUD, random.randint(config.CLOUD_MIN_ALPHA, config.CLOUD_MAX_ALPHA)), (puff_x, puff_y, puff_w, puff_h))
         
         self.speed_factor = random.uniform(config.MIN_CLOUD_SPEED_FACTOR, config.MAX_CLOUD_SPEED_FACTOR)
-        self.dx = config.current_wind_speed_x * self.speed_factor # Read from config
-        self.dy = config.current_wind_speed_y * self.speed_factor # Read from config
+        self.dx = config.current_wind_speed_x * self.speed_factor 
+        self.dy = config.current_wind_speed_y * self.speed_factor 
         self.x_float = 0.0
         self.y_float = 0.0
 
@@ -410,7 +425,7 @@ class ForegroundCloud(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(topleft=(round(self.x_float), round(self.y_float)))
 
     def update(self):
-        self.dx = config.current_wind_speed_x * self.speed_factor # Re-fetch from config in case wind changed
+        self.dx = config.current_wind_speed_x * self.speed_factor 
         self.dy = config.current_wind_speed_y * self.speed_factor
         self.x_float += self.dx
         self.y_float += self.dy
