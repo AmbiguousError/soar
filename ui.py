@@ -286,7 +286,7 @@ def draw_race_complete_screen(surface, total_time_seconds, lap_times_list):
     draw_text(surface, "Press ENTER for Main Menu", 32, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 5 // 6, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
 
-def draw_game_over_screen_content(surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): 
+def draw_game_over_screen_content (surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "GAME OVER", 72, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     y_offset = config.SCREEN_HEIGHT // 2 - 80 
