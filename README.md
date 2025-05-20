@@ -2,10 +2,9 @@
 
 Pastel Glider is a 2D gliding simulation game built with Pygame. Players can explore procedurally generated landscapes in Free Fly mode, utilizing thermals to gain altitude and unlock wingmen, or compete against AI opponents in Race mode. The game features a soft pastel aesthetic and physics-based glider controls.
 
-<video controls width="250">
-    <source src="/PastelGlider.mp4" type="video/mp4">
-    Sorry, your browser doesn't support embedded videos.
-</video>
+<video src="https://github.com/AmbiguousError/soar/blob/main/PastelGlider.mp4" controls="controls" style="max-width: 730px;"></video>
+
+
 ## Features
 
 * **Two Game Modes:**
