@@ -52,10 +52,9 @@ class Minimap:
         self.surface.fill(config.PASTEL_MINIMAP_BACKGROUND)
         player_mini_x, player_mini_y = self.width // 2, self.height // 2
         pygame.draw.circle(self.surface, config.PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
-        for ai in ai_gliders_list: # ai is an AIGlider instance
+        for ai in ai_gliders_list: 
             ai_mini_x, ai_mini_y = self.world_to_minimap(ai.world_x, ai.world_y, player_glider.world_x, player_glider.world_y)
             if 0 <= ai_mini_x <= self.width and 0 <= ai_mini_y <= self.height:
-                 # Use the AI's specific body color for its dot on the minimap
                  pygame.draw.circle(self.surface, ai.body_color, (ai_mini_x, ai_mini_y), 4) 
         for i, marker_obj in enumerate(course_markers):
             mini_x, mini_y = self.world_to_minimap(marker_obj.world_pos.x, marker_obj.world_pos.y, player_glider.world_x, player_glider.world_y)
@@ -226,6 +225,26 @@ def draw_pause_menu_screen(surface):
     draw_text(surface, "Press C to Continue", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
+def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list): # Renamed from draw_race_complete_screen
+    surface.fill(config.PASTEL_DARK_GRAY)
+    draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 - 30, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
+    draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 36, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 + 30, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+    
+    y_offset = config.SCREEN_HEIGHT // 2 - 50
+    if lap_times_list:
+        draw_text(surface, "Lap Times:", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+        y_offset += 30
+        for i, lap_time in enumerate(lap_times_list):
+            draw_text(surface, f"Lap {i+1}: {lap_time:.1f}s", config.HUD_FONT_SIZE_SMALL, config.SCREEN_WIDTH // 2, y_offset + (i * 25), config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+        y_offset += (len(lap_times_list) * 25) + 20 
+
+    draw_text(surface, "N: New Race", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    y_offset += 40
+    draw_text(surface, "F: Free Fly This Map", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    y_offset += 40
+    draw_text(surface, "Q: Main Menu", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+
+# This function is still needed if STATE_RACE_COMPLETE is ever directly drawn (though current logic flows to POST_OPTIONS)
 def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
@@ -235,6 +254,7 @@ def draw_race_complete_screen(surface, total_time_seconds, lap_times_list):
         for i, lap_time in enumerate(lap_times_list):
             draw_text(surface, f"Lap {i+1}: {lap_time:.1f}s", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 55 + (i * 28), config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press ENTER for Main Menu", 32, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 5 // 6, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+
 
 def draw_game_over_screen_content(surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): 
     surface.fill(config.PASTEL_DARK_GRAY)

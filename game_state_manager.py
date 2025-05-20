@@ -7,15 +7,16 @@ import random
 import config
 from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud
 from map_generation import regenerate_river_parameters, get_land_type_at_world_pos 
-from ui import Minimap # Ensure Minimap is imported from ui
+from ui import Minimap 
 
 # --- Game Variables (managed by this module) ---
 # These are defined at the module level to be accessible via gsm.<variable_name>
 
-game_state = config.STATE_START_SCREEN # Crucial global variable
+game_state = config.STATE_START_SCREEN 
 
 player = PlayerGlider() 
 ai_gliders = pygame.sprite.Group() 
+wingmen_group = pygame.sprite.Group() # For Free Fly wingmen
 all_world_sprites = pygame.sprite.Group() 
 thermals_group = pygame.sprite.Group()    
 foreground_clouds_group = pygame.sprite.Group() 
@@ -26,11 +27,14 @@ time_taken_for_level = 0.0
 current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE
 thermal_spawn_timer = 0
 final_score = 0 
+unlocked_wingmen_count = 0
 
 selected_difficulty_option = config.DIFFICULTY_NORMAL 
-# config.game_difficulty is updated directly in main.py based on this, then used by other modules
+config.game_difficulty = selected_difficulty_option # Initialize in config
+
 selected_mode_option = config.MODE_FREE_FLY
-# config.current_game_mode is updated directly in main.py based on this
+config.current_game_mode = selected_mode_option # Initialize in config
+
 selected_laps_option = 1 
 lap_options = [1, 3, 5] 
 total_race_laps = config.DEFAULT_RACE_LAPS 
@@ -39,7 +43,6 @@ current_map_offset_x = 0
 current_map_offset_y = 0
 tile_type_cache = {} 
 
-# High Scores & Lap Times
 high_scores = {
     "longest_flight_time_free_fly": 0.0,
     "max_altitude_free_fly": 0.0,
@@ -49,12 +52,10 @@ high_scores = {
 player_race_lap_times = []
 race_course_markers = [] 
 
-# Pause State
 game_state_before_pause = None
 pause_start_ticks = 0
 current_session_flight_start_ticks = 0 
 
-# UI Instances
 minimap = Minimap(config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT, config.MINIMAP_MARGIN)
 
 # --- Core Game Logic Functions ---
@@ -76,24 +77,63 @@ def generate_new_wind():
     config.current_wind_speed_x = wind_strength * math.cos(wind_angle_rad)
     config.current_wind_speed_y = wind_strength * math.sin(wind_angle_rad)
 
-def start_new_level(level_param):
+def spawn_wingmen(): # Moved from main.py to here
+    global wingmen_group, all_world_sprites, unlocked_wingmen_count, player
+    wingmen_group.empty() 
+    for sprite in list(all_world_sprites):
+        if isinstance(sprite, AIGlider) and sprite.ai_mode == "wingman":
+            sprite.kill()
+
+    for i in range(unlocked_wingmen_count):
+        if i >= config.MAX_WINGMEN: break 
+
+        side_multiplier = 1 if i % 2 == 0 else -1
+        dist_x = config.WINGMAN_FOLLOW_DISTANCE_X - (i // 2) * 20 
+        dist_y = (config.WINGMAN_FOLLOW_DISTANCE_Y_BASE + (i // 2) * config.WINGMAN_FORMATION_SPREAD) * side_multiplier
+        
+        player_heading_rad = math.radians(player.heading)
+        start_x_offset = dist_x * math.cos(player_heading_rad) - dist_y * math.sin(player_heading_rad)
+        start_y_offset = dist_x * math.sin(player_heading_rad) + dist_y * math.cos(player_heading_rad)
+
+        start_x = player.world_x + start_x_offset
+        start_y = player.world_y + start_y_offset
+        
+        body_color, wing_color = config.AI_GLIDER_COLORS_LIST[(config.NUM_AI_OPPONENTS + i) % len(config.AI_GLIDER_COLORS_LIST)] 
+        
+        profile = {
+            "speed_factor": random.uniform(0.85, 1.05), 
+            "turn_factor": random.uniform(0.8, 1.1), 
+            "altitude_offset": random.uniform(-40, 10) 
+        }
+        wingman = AIGlider(start_x, start_y, body_color, wing_color, profile, ai_mode="wingman", player_ref=player)
+        wingmen_group.add(wingman)
+        all_world_sprites.add(wingman)
+
+
+def start_new_level(level_param, continue_map_from_race=False): 
     global current_level, level_timer_start_ticks, current_thermal_spawn_rate, thermal_spawn_timer, game_state
     global current_map_offset_x, current_map_offset_y, total_race_laps, ai_gliders, tile_type_cache
     global player_race_lap_times, current_session_flight_start_ticks, race_course_markers
     
     level_timer_start_ticks = pygame.time.get_ticks()
-    current_map_offset_x = random.randint(-200000, 200000)
-    current_map_offset_y = random.randint(-200000, 200000)
-    tile_type_cache.clear() 
     
-    regenerate_river_parameters(current_level + pygame.time.get_ticks()) 
-    generate_new_wind() 
+    if not continue_map_from_race: 
+        current_map_offset_x = random.randint(-200000, 200000)
+        current_map_offset_y = random.randint(-200000, 200000)
+        tile_type_cache.clear() 
+        regenerate_river_parameters(current_level + pygame.time.get_ticks()) 
+        generate_new_wind() 
     
     thermals_group.empty()
-    all_world_sprites.empty()
+    for sprite in list(all_world_sprites):
+        if isinstance(sprite, (Thermal, AIGlider, RaceMarker)): 
+            sprite.kill()
+    
     race_course_markers.clear() 
-    ai_gliders.empty()
-    foreground_clouds_group.empty()
+    ai_gliders.empty() 
+    wingmen_group.empty() 
+
+    foreground_clouds_group.empty() 
     for i in range(config.NUM_FOREGROUND_CLOUDS):
         foreground_clouds_group.add(ForegroundCloud(initial_distribution=True, index=i))
     
@@ -110,13 +150,14 @@ def start_new_level(level_param):
         elif config.game_difficulty == config.DIFFICULTY_EASY:
             current_thermal_spawn_rate = max(30, int(current_thermal_spawn_rate * 0.75))
         thermal_spawn_timer = 0
+        spawn_wingmen() 
         game_state = config.STATE_PLAYING_FREE_FLY
     elif config.current_game_mode == config.MODE_RACE:
         total_race_laps = level_param 
         generate_race_course() 
         for i in range(config.NUM_AI_OPPONENTS):
-            angle_offset = math.pi + (i - config.NUM_AI_OPPONENTS / 2.0) * (math.pi / 6) # Spread more behind/sides
-            dist_offset = 100 + i * 40 # Increase starting distance and stagger
+            angle_offset = math.pi + (i - config.NUM_AI_OPPONENTS / 2.0) * (math.pi / 6) 
+            dist_offset = 100 + i * 40 
             
             ai_start_x = player.world_x + dist_offset * math.cos(angle_offset + math.radians(player.heading)) 
             ai_start_y = player.world_y + dist_offset * math.sin(angle_offset + math.radians(player.heading))
@@ -128,7 +169,7 @@ def start_new_level(level_param):
                 "turn_factor": random.uniform(0.85, 1.15), 
                 "altitude_offset": random.uniform(-20, 20) 
             }
-            new_ai = AIGlider(ai_start_x, ai_start_y, body_color, wing_color, profile)
+            new_ai = AIGlider(ai_start_x, ai_start_y, body_color, wing_color, profile, ai_mode="race")
             ai_gliders.add(new_ai)
             all_world_sprites.add(new_ai) 
         current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE * 1.5 
@@ -140,16 +181,18 @@ def start_new_level(level_param):
 def reset_to_main_menu():
     global game_state, current_level, final_score
     global selected_difficulty_option, selected_mode_option, selected_laps_option
-    global player_race_lap_times, race_course_markers
+    global player_race_lap_times, race_course_markers, unlocked_wingmen_count
     
     player.reset() 
     thermals_group.empty()
     all_world_sprites.empty()
     race_course_markers.clear() 
     ai_gliders.empty()
+    wingmen_group.empty()
     foreground_clouds_group.empty()
     tile_type_cache.clear()
     player_race_lap_times.clear() 
+    unlocked_wingmen_count = 0 
     
     config.current_wind_speed_x = -0.2 
     config.current_wind_speed_y = 0.05
@@ -169,7 +212,7 @@ def update_game_logic(keys):
     global game_state, time_taken_for_level, final_score, current_thermal_spawn_rate, thermal_spawn_timer
     global current_map_offset_x, current_map_offset_y, tile_type_cache 
     global race_course_markers, total_race_laps, level_timer_start_ticks 
-    global high_scores, player_race_lap_times, current_session_flight_start_ticks
+    global high_scores, player_race_lap_times, current_session_flight_start_ticks, unlocked_wingmen_count
 
     game_data_for_player = {
         "current_wind_speed_x": config.current_wind_speed_x,
@@ -186,7 +229,9 @@ def update_game_logic(keys):
     }
     
     new_gs_from_player, ttf_update = player.update(keys, game_data_for_player)
-    game_state = new_gs_from_player 
+    
+    if new_gs_from_player != game_state:
+        game_state = new_gs_from_player
     time_taken_for_level = ttf_update
 
     cam_x = player.world_x - config.SCREEN_WIDTH // 2
@@ -206,7 +251,10 @@ def update_game_logic(keys):
                 if ((ai1.world_x - ai2.world_x)**2 + (ai1.world_y - ai2.world_y)**2) < (ai1.collision_radius + ai2.collision_radius)**2:
                     ai1.apply_collision_effect()
                     ai2.apply_collision_effect()
-    
+    elif game_state == config.STATE_PLAYING_FREE_FLY:
+        for wingman in wingmen_group:
+            wingman.update(cam_x, cam_y, player, 0, game_state) 
+
     for thermal_sprite in thermals_group:
         thermal_sprite.update(cam_x, cam_y)
     
@@ -236,6 +284,9 @@ def update_game_logic(keys):
         game_state = config.STATE_TARGET_REACHED_OPTIONS
         level_end_ticks = pygame.time.get_ticks()
         time_taken_for_level = (level_end_ticks - level_timer_start_ticks) / 1000.0
+        if unlocked_wingmen_count < config.MAX_WINGMEN:
+            unlocked_wingmen_count += 1
+        spawn_wingmen() 
     
     if player.height <= 0:
         final_score = player.height 

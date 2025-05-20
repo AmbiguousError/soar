@@ -11,7 +11,8 @@ from map_generation import draw_endless_map
 from ui import (draw_text, Minimap, draw_height_indicator_hud, draw_dial, draw_weather_vane, 
                 draw_start_screen_content, draw_difficulty_select_screen, draw_mode_select_screen,
                 draw_laps_select_screen, draw_target_reached_options_screen, draw_post_goal_menu_screen,
-                draw_pause_menu_screen, draw_race_complete_screen, draw_game_over_screen_content)
+                draw_pause_menu_screen, draw_race_complete_screen, draw_game_over_screen_content,
+                draw_race_post_options_screen) # Added new screen
 import game_state_manager as gsm 
 
 # --- Pygame Setup ---
@@ -21,7 +22,7 @@ screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
 pygame.display.set_caption("Pastel Glider - Floating Dreams")
 clock = pygame.time.Clock()
 
-# --- Initial Camera Position (will be updated in the loop) ---
+# --- Initial Camera Position ---
 camera_x_current = 0.0 
 camera_y_current = 0.0
 
@@ -90,9 +91,19 @@ while running:
                     gsm.reset_to_main_menu()
                 elif event.key == pygame.K_r or event.key == pygame.K_ESCAPE:
                     gsm.game_state = config.STATE_TARGET_REACHED_CONTINUE_PLAYING
-            elif gsm.game_state == config.STATE_RACE_COMPLETE:
-                if event.key == pygame.K_RETURN:
+            elif gsm.game_state == config.STATE_RACE_COMPLETE: # Transition to post-race options
+                gsm.game_state = config.STATE_RACE_POST_OPTIONS
+            elif gsm.game_state == config.STATE_RACE_POST_OPTIONS:
+                if event.key == pygame.K_n: # New Race
+                    gsm.game_state = config.STATE_RACE_LAPS_SELECT # Go back to lap selection
+                elif event.key == pygame.K_f: # Free Fly This Map
+                    config.current_game_mode = config.MODE_FREE_FLY
+                    # Call start_new_level, but indicate to continue on the current map if desired
+                    # For now, let's make it simple: starts a new free fly level (new map)
+                    gsm.start_new_level(1, continue_map_from_race=True) # Pass level 1 for free fly
+                elif event.key == pygame.K_q: # Quit to Main Menu
                     gsm.reset_to_main_menu()
+
             elif gsm.game_state == config.STATE_GAME_OVER:
                 if event.key == pygame.K_RETURN:
                     gsm.reset_to_main_menu()
@@ -100,32 +111,24 @@ while running:
     # --- Updates ---
     if gsm.game_state not in (config.STATE_PAUSED, config.STATE_START_SCREEN, config.STATE_DIFFICULTY_SELECT, 
                            config.STATE_MODE_SELECT, config.STATE_RACE_LAPS_SELECT, config.STATE_TARGET_REACHED_OPTIONS, 
-                           config.STATE_POST_GOAL_MENU, config.STATE_RACE_COMPLETE, config.STATE_GAME_OVER):
+                           config.STATE_POST_GOAL_MENU, config.STATE_RACE_COMPLETE, config.STATE_GAME_OVER, config.STATE_RACE_POST_OPTIONS):
         camera_x_current, camera_y_current = gsm.update_game_logic(keys)
     
     # --- Drawing ---
     screen.fill(config.PASTEL_BLACK)
     
     if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_TARGET_REACHED_CONTINUE_PLAYING, config.STATE_RACE_PLAYING, config.STATE_PAUSED):
-        # If paused, use the last known camera position, otherwise it's updated by update_game_logic
-        # For the very first frame of a gameplay state, camera_x_current might still be 0,0
-        # but it will be immediately updated by the first call to update_game_logic.
-        # If drawing occurs before update_game_logic in the first frame, it might use the default 0,0.
-        # This is generally fine as it's a momentary state.
-        # To be extremely robust, one could initialize camera_x_current based on player start after start_new_level.
-        # For now, this structure should work.
-        
-        # Ensure camera is based on player if game is active, otherwise keep last known for pause
-        if gsm.game_state != config.STATE_PAUSED:
+        if gsm.game_state != config.STATE_PAUSED: # Update camera only if not paused
              camera_x_current = gsm.player.world_x - config.SCREEN_WIDTH // 2
              camera_y_current = gsm.player.world_y - config.SCREEN_HEIGHT // 2
 
-
         draw_endless_map(screen, camera_x_current, camera_y_current, gsm.current_map_offset_x, gsm.current_map_offset_y, gsm.tile_type_cache)
         gsm.player.draw_contrail(screen, camera_x_current, camera_y_current)
-        for ags in gsm.ai_gliders:
-            ags.draw_contrail(screen, camera_x_current, camera_y_current)
-        gsm.all_world_sprites.draw(screen)
+        # Draw AI racers and Wingmen
+        for racer in gsm.ai_gliders: racer.draw_contrail(screen, camera_x_current, camera_y_current)
+        for wingman in gsm.wingmen_group: wingman.draw_contrail(screen, camera_x_current, camera_y_current)
+        
+        gsm.all_world_sprites.draw(screen) # This includes AI racers, Wingmen, Markers, Thermals
         screen.blit(gsm.player.image, gsm.player.rect) 
         gsm.foreground_clouds_group.draw(screen) 
         
@@ -138,6 +141,8 @@ while running:
         if config.current_game_mode == config.MODE_FREE_FLY:
             draw_text(screen, f"Level: {gsm.current_level}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
             draw_text(screen, f"Target: {config.TARGET_HEIGHT_PER_LEVEL * gsm.current_level}m", config.HUD_FONT_SIZE_NORMAL, hm + 150, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
+            draw_text(screen, f"Wingmen: {gsm.unlocked_wingmen_count}", config.HUD_FONT_SIZE_NORMAL, hm + 320, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
+
         elif config.current_game_mode == config.MODE_RACE:
             draw_text(screen, f"Lap: {min(gsm.player.laps_completed + 1, gsm.total_race_laps)}/{gsm.total_race_laps}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
             current_lap_time_display = 0.0
@@ -155,7 +160,8 @@ while running:
                 angle_to_marker_world_rad = math.atan2(marker_dy, marker_dx); angle_to_marker_world_deg = math.degrees(angle_to_marker_world_rad)
                 relative_angle_to_marker = (angle_to_marker_world_deg - gsm.player.heading + 360) % 360
                 
-                marker_dial_x = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 180 
+                # Position Marker Dial to the left of Wind Vane
+                marker_dial_x = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 180 - 50 
                 draw_dial(screen, marker_dial_x, hm + config.HUD_HEIGHT // 2 - 10, 22, relative_angle_to_marker, config.PASTEL_ACTIVE_MARKER_COLOR) 
 
         cyh += ls
@@ -167,10 +173,10 @@ while running:
         draw_text(screen, f"Height: {int(gsm.player.height)}m", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
         draw_text(screen, f"Speed: {gsm.player.speed:.1f}", config.HUD_FONT_SIZE_NORMAL, hm + 150, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
         if gsm.player.speed < config.STALL_SPEED:
-            draw_text(screen, "STALL!", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, hm + ls // 2, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
+            draw_text(screen, "STALL!", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, hm + ls // 2 - 5, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
         
         wind_text_x_pos = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 125 
-        draw_text(screen, f"Wind:", config.HUD_FONT_SIZE_SMALL, wind_text_x_pos - 50, hm + config.HUD_HEIGHT // 2 - 22, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME) 
+        draw_text(screen, f"Wind:", config.HUD_FONT_SIZE_SMALL, wind_text_x_pos - 50, hm + config.HUD_HEIGHT // 2 - 10, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME) 
         draw_weather_vane(screen, config.current_wind_speed_x, config.current_wind_speed_y, wind_text_x_pos, hm + config.HUD_HEIGHT // 2 - 10 , 22) 
         
         et = "ESC for Menu"
@@ -198,8 +204,10 @@ while running:
         draw_target_reached_options_screen(screen, gsm.current_level, gsm.time_taken_for_level); gsm.foreground_clouds_group.draw(screen)
     elif gsm.game_state == config.STATE_POST_GOAL_MENU:
         draw_post_goal_menu_screen(screen, gsm.current_level); gsm.foreground_clouds_group.draw(screen)
-    elif gsm.game_state == config.STATE_RACE_COMPLETE:
-        draw_race_complete_screen(screen, gsm.time_taken_for_level, gsm.player_race_lap_times); gsm.foreground_clouds_group.draw(screen) 
+    elif gsm.game_state == config.STATE_RACE_COMPLETE: # Should not be reached if STATE_RACE_POST_OPTIONS is used
+        draw_race_post_options_screen(screen, gsm.time_taken_for_level, gsm.player_race_lap_times); gsm.foreground_clouds_group.draw(screen)
+    elif gsm.game_state == config.STATE_RACE_POST_OPTIONS:
+        draw_race_post_options_screen(screen, gsm.time_taken_for_level, gsm.player_race_lap_times); gsm.foreground_clouds_group.draw(screen)
     elif gsm.game_state == config.STATE_GAME_OVER:
         draw_game_over_screen_content(screen, gsm.final_score, gsm.current_level, gsm.high_scores, config.current_game_mode, gsm.total_race_laps); gsm.foreground_clouds_group.draw(screen) 
     

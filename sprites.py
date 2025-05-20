@@ -10,7 +10,7 @@ import config # Import constants
 class GliderBase(pygame.sprite.Sprite):
     def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0):
         super().__init__()
-        self.body_color = body_color # Ensure this line is present and correct
+        self.body_color = body_color 
         self.wing_color = wing_color 
 
         self.fuselage_length = config.GLIDER_COLLISION_RADIUS * 2.25 
@@ -65,8 +65,8 @@ class GliderBase(pygame.sprite.Sprite):
         self.speed = config.INITIAL_SPEED 
         self.trail_points = [] 
         self.contrail_frame_counter = 0
-        self.current_target_marker_index = 0
-        self.laps_completed = 0
+        self.current_target_marker_index = 0 # Used by race AI
+        self.laps_completed = 0 # Used by race AI
 
     def update_sprite_rotation_and_position(self, cam_x=None, cam_y=None):
         self.image = pygame.transform.rotate(self.original_image, -self.heading) 
@@ -238,89 +238,142 @@ class PlayerGlider(GliderBase):
 
 # --- AI Glider Class ---
 class AIGlider(GliderBase):
-    def __init__(self, start_world_x, start_world_y, body_color, wing_color, personality_profile=None):
-        super().__init__(body_color, wing_color, start_world_x, start_world_y) # body_color is passed to GliderBase
+    def __init__(self, start_world_x, start_world_y, body_color, wing_color, personality_profile=None, ai_mode="race", player_ref=None):
+        super().__init__(body_color, wing_color, start_world_x, start_world_y)
         
+        self.ai_mode = ai_mode # "race" or "wingman"
+        self.player_ref = player_ref # Reference to player object for wingman mode
+
         self.personality = personality_profile if personality_profile else {}
         self.speed_factor = self.personality.get("speed_factor", 1.0)
-        self.turn_factor = self.personality.get("turn_factor", 1.0)
-        self.altitude_offset = self.personality.get("altitude_offset", 0)
+        self.turn_factor = self.personality.get("turn_factor", 1.0) # Affects base turn rate
+        self.altitude_preference_offset = self.personality.get("altitude_offset", random.uniform(-30, 30)) # Slight altitude variation preference
 
-        self.ai_min_speed = config.AI_BASE_SPEED_MIN * self.speed_factor
-        self.ai_max_speed = config.AI_BASE_SPEED_MAX * self.speed_factor
-        self.ai_turn_rate_scalar = config.AI_BASE_TURN_RATE_SCALAR * self.turn_factor
-        self.ai_target_altitude = config.AI_TARGET_RACE_ALTITUDE + self.altitude_offset
+        # Personalized base stats
+        self.base_min_speed = config.AI_BASE_SPEED_MIN * self.speed_factor
+        self.base_max_speed = config.AI_BASE_SPEED_MAX * self.speed_factor
+        self.base_turn_rate_scalar = config.AI_BASE_TURN_RATE_SCALAR * self.turn_factor
+        
+        self.target_altitude = config.AI_TARGET_RACE_ALTITUDE + self.altitude_preference_offset
+        if self.ai_mode == "wingman" and self.player_ref:
+            self.target_altitude = self.player_ref.height + self.altitude_preference_offset
 
 
-        self.speed = random.uniform(self.ai_min_speed, self.ai_max_speed)
-        self.height = self.ai_target_altitude + random.uniform(-50, 50) 
-        self.base_target_speed = random.uniform(self.ai_min_speed, self.ai_max_speed) 
+        self.speed = random.uniform(self.base_min_speed, self.base_max_speed)
+        self.height = self.target_altitude + random.uniform(-50, 50) 
+        self.base_target_speed = random.uniform(self.base_min_speed, self.base_max_speed) 
         self.target_speed = self.base_target_speed
         self.speed_update_timer = random.randint(0, config.AI_TARGET_SPEED_UPDATE_INTERVAL // 2)
+        self.wingman_offset_angle = random.uniform(-math.pi / 4, math.pi / 4) # For formation spread
+        self.wingman_follow_dist_x = config.WINGMAN_FOLLOW_DISTANCE_X + random.uniform(-10,10)
+        self.wingman_follow_dist_y = config.WINGMAN_FOLLOW_DISTANCE_Y_BASE * (1 if random.random() < 0.5 else -1) + random.uniform(-15,15)
 
 
-    def update(self, cam_x, cam_y, race_markers_list, total_laps_in_race, current_game_state):
-        if not race_markers_list or current_game_state != config.STATE_RACE_PLAYING: 
-            self.update_sprite_rotation_and_position(cam_x, cam_y)
-            self.update_contrail()
-            return
-        
-        target_marker = race_markers_list[self.current_target_marker_index]
-        dx = target_marker.world_pos.x - self.world_x
-        dy = target_marker.world_pos.y - self.world_y
-        dist_to_marker = math.hypot(dx, dy)
-        
-        target_angle_rad = math.atan2(dy, dx)
-        target_angle_deg = math.degrees(target_angle_rad)
-        current_heading_deg = self.heading % 360
-        target_angle_deg %= 360
-        angle_diff = target_angle_deg - current_heading_deg
-        if angle_diff > 180: angle_diff -= 360
-        if angle_diff < -180: angle_diff += 360
-        self.heading = (self.heading + (angle_diff * self.ai_turn_rate_scalar)) % 360
-        
+    def update_race_behavior(self, race_markers_list, dist_to_marker, angle_diff):
+        # Speed control for racing
         if dist_to_marker < config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE:
-            self.target_speed = self.ai_min_speed + (self.ai_max_speed - self.ai_min_speed) * \
+            self.target_speed = self.base_min_speed + (self.base_max_speed - self.base_min_speed) * \
                                 (dist_to_marker / config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE) * \
                                 config.AI_MARKER_APPROACH_MIN_SPEED_FACTOR
-            self.target_speed = max(self.ai_min_speed * 0.8, self.target_speed) 
+            self.target_speed = max(self.base_min_speed * 0.8, self.target_speed) 
             self.speed_update_timer = 0 
         elif dist_to_marker > config.AI_STRAIGHT_BOOST_MIN_DISTANCE and abs(angle_diff) < config.AI_STRAIGHT_BOOST_THRESHOLD_ANGLE:
-            self.target_speed = self.ai_max_speed 
+            self.target_speed = self.base_max_speed # Boost on straights
             self.speed_update_timer = 0 
-        else:
+        else: # General cruising speed adjustment
             self.speed_update_timer += 1
             if self.speed_update_timer >= config.AI_TARGET_SPEED_UPDATE_INTERVAL:
-                speed_range = self.ai_max_speed - self.ai_min_speed
+                speed_range = self.base_max_speed - self.base_min_speed
                 random_variation = random.uniform(-speed_range * config.AI_SPEED_VARIATION_FACTOR, 
                                                  speed_range * config.AI_SPEED_VARIATION_FACTOR)
                 self.target_speed = self.base_target_speed + random_variation 
-                self.target_speed = max(self.ai_min_speed, min(self.target_speed, self.ai_max_speed))
+                self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
                 self.speed_update_timer = 0
-
-        if self.speed < self.target_speed: 
-            self.speed += config.ACCELERATION * 0.5 
-        elif self.speed > self.target_speed: 
-            self.speed -= config.ACCELERATION * 0.5
-        self.speed = max(self.ai_min_speed * 0.7, min(self.speed, self.ai_max_speed * 1.1)) 
         
-        alt_diff = self.ai_target_altitude - self.height 
+        # Altitude control for racing
+        alt_diff = self.target_altitude - self.height 
         self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE 
-        if self.height < 0: 
-            self.height = 0 
+
+    def update_wingman_behavior(self):
+        if not self.player_ref: return
+
+        # Calculate target position relative to player
+        player_heading_rad = math.radians(self.player_ref.heading)
+        
+        # Offset behind and to the side of the player
+        offset_x_local = self.wingman_follow_dist_x 
+        offset_y_local = self.wingman_follow_dist_y
+        
+        # Rotate offset by player's heading to get world offset
+        target_rel_x = offset_x_local * math.cos(player_heading_rad) - offset_y_local * math.sin(player_heading_rad)
+        target_rel_y = offset_x_local * math.sin(player_heading_rad) + offset_y_local * math.cos(player_heading_rad)
+            
+        target_world_x = self.player_ref.world_x + target_rel_x
+        target_world_y = self.player_ref.world_y + target_rel_y
+
+        dx = target_world_x - self.world_x
+        dy = target_world_y - self.world_y
+        
+        # Target speed similar to player, with some variation
+        self.target_speed = self.player_ref.speed * self.speed_factor + random.uniform(-0.5, 0.5)
+        self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
+
+        # Altitude: try to match player's height + personal offset
+        self.target_altitude = self.player_ref.height + self.altitude_preference_offset
+        alt_diff = self.target_altitude - self.height
+        self.height += alt_diff * config.WINGMAN_ALTITUDE_CORRECTION_RATE
+
+        return dx, dy # Return dx, dy for steering
+
+    def update(self, cam_x, cam_y, game_entities, total_laps_in_race, current_game_state): # game_entities can be markers or player
+        if self.ai_mode == "race":
+            if not game_entities or current_game_state != config.STATE_RACE_PLAYING: 
+                self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
+            race_markers_list = game_entities
+            target_marker = race_markers_list[self.current_target_marker_index]
+            dx = target_marker.world_pos.x - self.world_x
+            dy = target_marker.world_pos.y - self.world_y
+            dist_to_marker = math.hypot(dx, dy)
+            
+            target_angle_rad = math.atan2(dy, dx)
+            target_angle_deg = math.degrees(target_angle_rad)
+            angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180 # Shortest angle
+            
+            self.update_race_behavior(race_markers_list, dist_to_marker, angle_diff)
+            
+            if dist_to_marker < target_marker.world_radius: 
+                self.current_target_marker_index += 1
+                if self.current_target_marker_index >= len(race_markers_list): 
+                    self.laps_completed += 1; self.current_target_marker_index = 0
+
+        elif self.ai_mode == "wingman":
+            if not self.player_ref or current_game_state != config.STATE_PLAYING_FREE_FLY:
+                self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
+            
+            dx, dy = self.update_wingman_behavior()
+            target_angle_rad = math.atan2(dy, dx)
+            target_angle_deg = math.degrees(target_angle_rad)
+            angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180
+        else: # Should not happen
+            self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
+
+        # Common steering and movement
+        turn_this_frame = angle_diff * self.base_turn_rate_scalar * config.WINGMAN_CASUALNESS_FACTOR if self.ai_mode == "wingman" else angle_diff * self.base_turn_rate_scalar
+        self.heading = (self.heading + turn_this_frame) % 360
+        
+        if self.speed < self.target_speed: self.speed += config.ACCELERATION * 0.5 
+        elif self.speed > self.target_speed: self.speed -= config.ACCELERATION * 0.5
+        self.speed = max(self.base_min_speed * 0.7, min(self.speed, self.base_max_speed * 1.1)) 
+        
+        if self.height < 0: self.height = 0 
         
         heading_rad = math.radians(self.heading)
         self.world_x += self.speed * math.cos(heading_rad)
         self.world_y += self.speed * math.sin(heading_rad)
         
-        if dist_to_marker < target_marker.world_radius: 
-            self.current_target_marker_index += 1
-            if self.current_target_marker_index >= len(race_markers_list): 
-                self.laps_completed += 1
-                self.current_target_marker_index = 0
-        
         self.update_sprite_rotation_and_position(cam_x, cam_y)
         self.update_contrail()
+
 
 # --- Thermal Class ---
 class Thermal(pygame.sprite.Sprite):
