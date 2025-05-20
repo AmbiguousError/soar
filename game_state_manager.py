@@ -5,23 +5,22 @@ import pygame
 import math
 import random
 import config
-from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud
+from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud, Bullet # Added Bullet
 from map_generation import regenerate_river_parameters, get_land_type_at_world_pos 
 from ui import Minimap 
 
 # --- Game Variables (managed by this module) ---
-# These are defined at the module level to be accessible via gsm.<variable_name>
-
-game_state = config.STATE_START_SCREEN 
-
 player = PlayerGlider() 
-ai_gliders = pygame.sprite.Group() 
+ai_gliders = pygame.sprite.Group() # For race AI
 wingmen_group = pygame.sprite.Group() # For Free Fly wingmen
+dogfight_enemies_group = pygame.sprite.Group() # For Dogfight AI
 all_world_sprites = pygame.sprite.Group() 
 thermals_group = pygame.sprite.Group()    
 foreground_clouds_group = pygame.sprite.Group() 
+bullets_group = pygame.sprite.Group() # For all bullets
 
-current_level = 1
+game_state = config.STATE_START_SCREEN
+current_level = 1 # Used for Free Fly level and Dogfight round
 level_timer_start_ticks = 0 
 time_taken_for_level = 0.0  
 current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE
@@ -30,10 +29,10 @@ final_score = 0
 unlocked_wingmen_count = 0
 
 selected_difficulty_option = config.DIFFICULTY_NORMAL 
-config.game_difficulty = selected_difficulty_option # Initialize in config
+config.game_difficulty = selected_difficulty_option 
 
 selected_mode_option = config.MODE_FREE_FLY
-config.current_game_mode = selected_mode_option # Initialize in config
+config.current_game_mode = selected_mode_option 
 
 selected_laps_option = 1 
 lap_options = [1, 3, 5] 
@@ -56,6 +55,11 @@ game_state_before_pause = None
 pause_start_ticks = 0
 current_session_flight_start_ticks = 0 
 
+# Dogfight specific variables
+dogfight_current_round = 1
+dogfight_enemies_to_spawn_this_round = 0
+dogfight_enemies_defeated_this_round = 0
+
 minimap = Minimap(config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT, config.MINIMAP_MARGIN)
 
 # --- Core Game Logic Functions ---
@@ -77,7 +81,7 @@ def generate_new_wind():
     config.current_wind_speed_x = wind_strength * math.cos(wind_angle_rad)
     config.current_wind_speed_y = wind_strength * math.sin(wind_angle_rad)
 
-def spawn_wingmen(): # Moved from main.py to here
+def spawn_wingmen(): 
     global wingmen_group, all_world_sprites, unlocked_wingmen_count, player
     wingmen_group.empty() 
     for sprite in list(all_world_sprites):
@@ -86,34 +90,60 @@ def spawn_wingmen(): # Moved from main.py to here
 
     for i in range(unlocked_wingmen_count):
         if i >= config.MAX_WINGMEN: break 
-
         side_multiplier = 1 if i % 2 == 0 else -1
         dist_x = config.WINGMAN_FOLLOW_DISTANCE_X - (i // 2) * 20 
         dist_y = (config.WINGMAN_FOLLOW_DISTANCE_Y_BASE + (i // 2) * config.WINGMAN_FORMATION_SPREAD) * side_multiplier
-        
         player_heading_rad = math.radians(player.heading)
         start_x_offset = dist_x * math.cos(player_heading_rad) - dist_y * math.sin(player_heading_rad)
         start_y_offset = dist_x * math.sin(player_heading_rad) + dist_y * math.cos(player_heading_rad)
-
         start_x = player.world_x + start_x_offset
         start_y = player.world_y + start_y_offset
-        
-        body_color, wing_color = config.AI_GLIDER_COLORS_LIST[(config.NUM_AI_OPPONENTS + i) % len(config.AI_GLIDER_COLORS_LIST)] 
-        
-        profile = {
-            "speed_factor": random.uniform(0.85, 1.05), 
-            "turn_factor": random.uniform(0.8, 1.1), 
-            "altitude_offset": random.uniform(-40, 10) 
-        }
+        body_color, wing_color = config.AI_GLIDER_COLORS_LIST[(config.NUM_AI_OPPONENTS + i + 1) % len(config.AI_GLIDER_COLORS_LIST)] # Offset color index
+        profile = {"speed_factor": random.uniform(0.85, 1.05), "turn_factor": random.uniform(0.8, 1.1), "altitude_offset": random.uniform(-40, 10)}
         wingman = AIGlider(start_x, start_y, body_color, wing_color, profile, ai_mode="wingman", player_ref=player)
-        wingmen_group.add(wingman)
-        all_world_sprites.add(wingman)
+        wingmen_group.add(wingman); all_world_sprites.add(wingman)
+
+def start_dogfight_round(round_number):
+    global dogfight_current_round, dogfight_enemies_to_spawn_this_round, dogfight_enemies_defeated_this_round
+    global dogfight_enemies_group, all_world_sprites, player, game_state
+
+    dogfight_current_round = round_number
+    dogfight_enemies_defeated_this_round = 0
+    
+    # Clear previous dogfight enemies
+    for enemy in dogfight_enemies_group:
+        enemy.kill()
+    dogfight_enemies_group.empty()
+
+    dogfight_enemies_to_spawn_this_round = min(config.DOGFIGHT_INITIAL_ENEMIES + (dogfight_current_round - 1) * config.DOGFIGHT_ENEMIES_PER_ROUND_INCREASE, 
+                                               config.DOGFIGHT_MAX_ENEMIES_ON_SCREEN)
+    
+    player.health = player.max_health # Replenish player health each round (optional)
+
+    for i in range(dogfight_enemies_to_spawn_this_round):
+        # Spawn enemies around the player at a distance
+        angle = random.uniform(0, 2 * math.pi)
+        distance = random.uniform(config.SCREEN_WIDTH * 0.6, config.SCREEN_WIDTH * 0.9) # Spawn further out
+        start_x = player.world_x + distance * math.cos(angle)
+        start_y = player.world_y + distance * math.sin(angle)
+        
+        body_color, wing_color = config.AI_GLIDER_COLORS_LIST[i % len(config.AI_GLIDER_COLORS_LIST)]
+        profile = {
+            "speed_factor": random.uniform(0.8, 1.1), # Dogfight AI can be a bit faster/slower
+            "turn_factor": random.uniform(0.9, 1.2),  # And more agile
+            "altitude_offset": random.uniform(-50, 50)
+        }
+        enemy = AIGlider(start_x, start_y, body_color, wing_color, profile, ai_mode="dogfight_enemy", player_ref=player)
+        dogfight_enemies_group.add(enemy)
+        all_world_sprites.add(enemy)
+    
+    game_state = config.STATE_DOGFIGHT_PLAYING
 
 
-def start_new_level(level_param, continue_map_from_race=False): 
+def start_new_level(level_param, continue_map_from_race=False):
     global current_level, level_timer_start_ticks, current_thermal_spawn_rate, thermal_spawn_timer, game_state
     global current_map_offset_x, current_map_offset_y, total_race_laps, ai_gliders, tile_type_cache
-    global player_race_lap_times, current_session_flight_start_ticks, race_course_markers
+    global player_race_lap_times, current_session_flight_start_ticks, race_course_markers, dogfight_current_round
     
     level_timer_start_ticks = pygame.time.get_ticks()
     
@@ -126,12 +156,14 @@ def start_new_level(level_param, continue_map_from_race=False):
     
     thermals_group.empty()
     for sprite in list(all_world_sprites):
-        if isinstance(sprite, (Thermal, AIGlider, RaceMarker)): 
+        if isinstance(sprite, (Thermal, AIGlider, RaceMarker, Bullet)): # Clear bullets too
             sprite.kill()
+    bullets_group.empty() # Explicitly clear bullets group
     
     race_course_markers.clear() 
     ai_gliders.empty() 
     wingmen_group.empty() 
+    dogfight_enemies_group.empty()
 
     foreground_clouds_group.empty() 
     for i in range(config.NUM_FOREGROUND_CLOUDS):
@@ -158,30 +190,27 @@ def start_new_level(level_param, continue_map_from_race=False):
         for i in range(config.NUM_AI_OPPONENTS):
             angle_offset = math.pi + (i - config.NUM_AI_OPPONENTS / 2.0) * (math.pi / 6) 
             dist_offset = 100 + i * 40 
-            
             ai_start_x = player.world_x + dist_offset * math.cos(angle_offset + math.radians(player.heading)) 
             ai_start_y = player.world_y + dist_offset * math.sin(angle_offset + math.radians(player.heading))
-
             body_color, wing_color = config.AI_GLIDER_COLORS_LIST[i % len(config.AI_GLIDER_COLORS_LIST)]
-            
-            profile = {
-                "speed_factor": random.uniform(0.9, 1.1), 
-                "turn_factor": random.uniform(0.85, 1.15), 
-                "altitude_offset": random.uniform(-20, 20) 
-            }
+            profile = {"speed_factor": random.uniform(0.9, 1.1), "turn_factor": random.uniform(0.85, 1.15), "altitude_offset": random.uniform(-20, 20)}
             new_ai = AIGlider(ai_start_x, ai_start_y, body_color, wing_color, profile, ai_mode="race")
-            ai_gliders.add(new_ai)
-            all_world_sprites.add(new_ai) 
+            ai_gliders.add(new_ai); all_world_sprites.add(new_ai) 
         current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE * 1.5 
         if config.game_difficulty == config.DIFFICULTY_NOOB:
             current_thermal_spawn_rate = max(30, int(current_thermal_spawn_rate * 0.7))
         thermal_spawn_timer = 0
         game_state = config.STATE_RACE_PLAYING
+    elif config.current_game_mode == config.MODE_DOGFIGHT:
+        dogfight_current_round = level_param # Use level_param as starting round
+        start_dogfight_round(dogfight_current_round)
+
 
 def reset_to_main_menu():
     global game_state, current_level, final_score
     global selected_difficulty_option, selected_mode_option, selected_laps_option
     global player_race_lap_times, race_course_markers, unlocked_wingmen_count
+    global dogfight_current_round, dogfight_enemies_defeated_this_round, dogfight_enemies_to_spawn_this_round
     
     player.reset() 
     thermals_group.empty()
@@ -189,10 +218,15 @@ def reset_to_main_menu():
     race_course_markers.clear() 
     ai_gliders.empty()
     wingmen_group.empty()
+    dogfight_enemies_group.empty()
+    bullets_group.empty()
     foreground_clouds_group.empty()
     tile_type_cache.clear()
     player_race_lap_times.clear() 
     unlocked_wingmen_count = 0 
+    dogfight_current_round = 1
+    dogfight_enemies_defeated_this_round = 0
+    dogfight_enemies_to_spawn_this_round = 0
     
     config.current_wind_speed_x = -0.2 
     config.current_wind_speed_y = 0.05
@@ -213,6 +247,7 @@ def update_game_logic(keys):
     global current_map_offset_x, current_map_offset_y, tile_type_cache 
     global race_course_markers, total_race_laps, level_timer_start_ticks 
     global high_scores, player_race_lap_times, current_session_flight_start_ticks, unlocked_wingmen_count
+    global dogfight_enemies_defeated_this_round, dogfight_current_round # Dogfight variables
 
     game_data_for_player = {
         "current_wind_speed_x": config.current_wind_speed_x,
@@ -228,33 +263,58 @@ def update_game_logic(keys):
         "time_taken_for_level": time_taken_for_level 
     }
     
-    new_gs_from_player, ttf_update = player.update(keys, game_data_for_player)
+    new_gs_from_player, ttf_update = player.update(keys, game_data_for_player, bullets_group, all_world_sprites) # Pass bullet groups
     
-    if new_gs_from_player != game_state:
-        game_state = new_gs_from_player
+    if new_gs_from_player != game_state: game_state = new_gs_from_player
     time_taken_for_level = ttf_update
 
     cam_x = player.world_x - config.SCREEN_WIDTH // 2
     cam_y = player.world_y - config.SCREEN_HEIGHT // 2
     
+    bullets_group.update(cam_x, cam_y)
+
     if game_state == config.STATE_RACE_PLAYING: 
         for ai in ai_gliders:
             ai.update(cam_x, cam_y, race_course_markers, total_race_laps, game_state)
+        # Collision checks for race AI... (as before)
         collided_ais = pygame.sprite.spritecollide(player, ai_gliders, False, pygame.sprite.collide_circle)
-        for ai_hit in collided_ais:
-            player.apply_collision_effect()
-            ai_hit.apply_collision_effect()
-        ai_list = list(ai_gliders)
-        for i in range(len(ai_list)):
-            for j in range(i + 1, len(ai_list)):
-                ai1, ai2 = ai_list[i], ai_list[j]
-                if ((ai1.world_x - ai2.world_x)**2 + (ai1.world_y - ai2.world_y)**2) < (ai1.collision_radius + ai2.collision_radius)**2:
-                    ai1.apply_collision_effect()
-                    ai2.apply_collision_effect()
+        for ai_hit in collided_ais: player.apply_collision_effect(); ai_hit.apply_collision_effect()
+        ai_list = list(ai_gliders); [(ai1.apply_collision_effect(),ai2.apply_collision_effect()) for i in range(len(ai_list)) for j in range(i+1,len(ai_list)) if(ai1:=ai_list[i],ai2:=ai_list[j],((ai1.world_x-ai2.world_x)**2+(ai1.world_y-ai2.world_y)**2)<(ai1.collision_radius+ai2.collision_radius)**2)]
+
     elif game_state == config.STATE_PLAYING_FREE_FLY:
         for wingman in wingmen_group:
             wingman.update(cam_x, cam_y, player, 0, game_state) 
+    
+    elif game_state == config.STATE_DOGFIGHT_PLAYING:
+        for enemy in dogfight_enemies_group:
+            enemy.update(cam_x, cam_y, player, 0, game_state, bullets_group, all_world_sprites) # Pass bullet groups
+        
+        # Bullet Collisions
+        # Player bullets hitting AI
+        for bullet in bullets_group:
+            if bullet.owner == player: # Only player's bullets can hit AI
+                enemies_hit = pygame.sprite.spritecollide(bullet, dogfight_enemies_group, False, pygame.sprite.collide_circle)
+                for enemy_hit in enemies_hit:
+                    bullet.kill() # Bullet disappears on hit
+                    if enemy_hit.take_damage(config.BULLET_DAMAGE): # True if enemy destroyed
+                        dogfight_enemies_defeated_this_round += 1
+        
+        # AI bullets hitting Player
+        for bullet in bullets_group:
+            if bullet.owner != player: # AI's bullets
+                if pygame.sprite.collide_circle(bullet, player):
+                    bullet.kill()
+                    if player.take_damage(config.BULLET_DAMAGE):
+                        game_state = config.STATE_DOGFIGHT_GAME_OVER_CONTINUE # Player destroyed
+                        final_score = player.height # Or current round
+                        break # Exit bullet loop if player is destroyed
+        if game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE: # Check again if player was destroyed
+             pass # Handled in main loop's drawing/state transition section
+        elif dogfight_enemies_defeated_this_round >= dogfight_enemies_to_spawn_this_round:
+            game_state = config.STATE_DOGFIGHT_ROUND_COMPLETE
+            time_taken_for_level = (pygame.time.get_ticks() - level_timer_start_ticks) / 1000.0 # Store round time
 
+    # Common updates for all active play states (except paused)
     for thermal_sprite in thermals_group:
         thermal_sprite.update(cam_x, cam_y)
     
@@ -288,7 +348,7 @@ def update_game_logic(keys):
             unlocked_wingmen_count += 1
         spawn_wingmen() 
     
-    if player.height <= 0:
+    if player.height <= 0 and game_state != config.STATE_DOGFIGHT_GAME_OVER_CONTINUE : # If not already handled by dogfight
         final_score = player.height 
         player.height = 0
         game_state = config.STATE_GAME_OVER

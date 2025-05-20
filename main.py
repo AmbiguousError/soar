@@ -6,13 +6,13 @@ import math
 import random 
 
 import config 
-from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud 
+from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud, Bullet
 from map_generation import draw_endless_map 
 from ui import (draw_text, Minimap, draw_height_indicator_hud, draw_dial, draw_weather_vane, 
                 draw_start_screen_content, draw_difficulty_select_screen, draw_mode_select_screen,
                 draw_laps_select_screen, draw_target_reached_options_screen, draw_post_goal_menu_screen,
-                draw_pause_menu_screen, draw_race_complete_screen, draw_game_over_screen_content,
-                draw_race_post_options_screen) # Added new screen
+                draw_pause_menu_screen, draw_race_post_options_screen, draw_game_over_screen_content,
+                draw_dogfight_round_complete_screen, draw_dogfight_game_over_continue_screen) # Added dogfight screens
 import game_state_manager as gsm 
 
 # --- Pygame Setup ---
@@ -41,12 +41,15 @@ while running:
                 if event.key == pygame.K_c: 
                     time_spent_paused = pygame.time.get_ticks() - gsm.pause_start_ticks
                     gsm.level_timer_start_ticks += time_spent_paused
-                    gsm.player.current_lap_start_ticks += time_spent_paused 
+                    if config.current_game_mode == config.MODE_RACE:
+                        gsm.player.current_lap_start_ticks += time_spent_paused
+                    elif config.current_game_mode == config.MODE_DOGFIGHT: # Also adjust dogfight round timer if any
+                        pass # No specific round timer to adjust beyond level_timer for now
                     gsm.current_session_flight_start_ticks += time_spent_paused
                     gsm.game_state = gsm.game_state_before_pause
                 elif event.key == pygame.K_q:
                     gsm.reset_to_main_menu()
-            elif gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_RACE_PLAYING, config.STATE_TARGET_REACHED_CONTINUE_PLAYING) and event.key == pygame.K_ESCAPE:
+            elif gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_RACE_PLAYING, config.STATE_TARGET_REACHED_CONTINUE_PLAYING, config.STATE_DOGFIGHT_PLAYING) and event.key == pygame.K_ESCAPE:
                 if gsm.game_state != config.STATE_PAUSED: 
                     gsm.game_state_before_pause = gsm.game_state
                     gsm.game_state = config.STATE_PAUSED
@@ -63,14 +66,19 @@ while running:
                     config.game_difficulty = gsm.selected_difficulty_option 
                     gsm.game_state = config.STATE_MODE_SELECT
             elif gsm.game_state == config.STATE_MODE_SELECT:
-                if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
-                    gsm.selected_mode_option = 1 - gsm.selected_mode_option
+                if event.key == pygame.K_UP:
+                    gsm.selected_mode_option = (gsm.selected_mode_option - 1 + 3) % 3 # Cycle through 3 modes
+                elif event.key == pygame.K_DOWN:
+                    gsm.selected_mode_option = (gsm.selected_mode_option + 1) % 3
                 elif event.key == pygame.K_RETURN:
                     config.current_game_mode = gsm.selected_mode_option 
                     if config.current_game_mode == config.MODE_FREE_FLY:
                         gsm.start_new_level(1) 
-                    else:
+                    elif config.current_game_mode == config.MODE_RACE:
                         gsm.game_state = config.STATE_RACE_LAPS_SELECT
+                    elif config.current_game_mode == config.MODE_DOGFIGHT:
+                        gsm.dogfight_current_round = 1 # Reset to round 1
+                        gsm.start_new_level(gsm.dogfight_current_round) # Start dogfight at round 1
             elif gsm.game_state == config.STATE_RACE_LAPS_SELECT:
                 if event.key == pygame.K_UP:
                     gsm.selected_laps_option = (gsm.selected_laps_option - 1 + len(gsm.lap_options)) % len(gsm.lap_options)
@@ -91,19 +99,26 @@ while running:
                     gsm.reset_to_main_menu()
                 elif event.key == pygame.K_r or event.key == pygame.K_ESCAPE:
                     gsm.game_state = config.STATE_TARGET_REACHED_CONTINUE_PLAYING
-            elif gsm.game_state == config.STATE_RACE_COMPLETE: # Transition to post-race options
+            elif gsm.game_state == config.STATE_RACE_COMPLETE: 
                 gsm.game_state = config.STATE_RACE_POST_OPTIONS
             elif gsm.game_state == config.STATE_RACE_POST_OPTIONS:
-                if event.key == pygame.K_n: # New Race
-                    gsm.game_state = config.STATE_RACE_LAPS_SELECT # Go back to lap selection
-                elif event.key == pygame.K_f: # Free Fly This Map
+                if event.key == pygame.K_n: 
+                    gsm.game_state = config.STATE_RACE_LAPS_SELECT 
+                elif event.key == pygame.K_f: 
                     config.current_game_mode = config.MODE_FREE_FLY
-                    # Call start_new_level, but indicate to continue on the current map if desired
-                    # For now, let's make it simple: starts a new free fly level (new map)
-                    gsm.start_new_level(1, continue_map_from_race=True) # Pass level 1 for free fly
+                    gsm.start_new_level(1, continue_map_from_race=True) 
+                elif event.key == pygame.K_q: 
+                    gsm.reset_to_main_menu()
+            elif gsm.game_state == config.STATE_DOGFIGHT_ROUND_COMPLETE:
+                if event.key == pygame.K_n: # Next Round
+                    gsm.start_dogfight_round(gsm.dogfight_current_round + 1)
                 elif event.key == pygame.K_q: # Quit to Main Menu
                     gsm.reset_to_main_menu()
-
+            elif gsm.game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE:
+                if event.key == pygame.K_c: # Continue (retry current round)
+                    gsm.start_dogfight_round(gsm.dogfight_current_round)
+                elif event.key == pygame.K_q: # Quit to Main Menu
+                    gsm.reset_to_main_menu()
             elif gsm.game_state == config.STATE_GAME_OVER:
                 if event.key == pygame.K_RETURN:
                     gsm.reset_to_main_menu()
@@ -111,24 +126,33 @@ while running:
     # --- Updates ---
     if gsm.game_state not in (config.STATE_PAUSED, config.STATE_START_SCREEN, config.STATE_DIFFICULTY_SELECT, 
                            config.STATE_MODE_SELECT, config.STATE_RACE_LAPS_SELECT, config.STATE_TARGET_REACHED_OPTIONS, 
-                           config.STATE_POST_GOAL_MENU, config.STATE_RACE_COMPLETE, config.STATE_GAME_OVER, config.STATE_RACE_POST_OPTIONS):
+                           config.STATE_POST_GOAL_MENU, config.STATE_RACE_COMPLETE, config.STATE_GAME_OVER, 
+                           config.STATE_RACE_POST_OPTIONS, config.STATE_DOGFIGHT_ROUND_COMPLETE, config.STATE_DOGFIGHT_GAME_OVER_CONTINUE):
         camera_x_current, camera_y_current = gsm.update_game_logic(keys)
     
     # --- Drawing ---
     screen.fill(config.PASTEL_BLACK)
     
-    if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_TARGET_REACHED_CONTINUE_PLAYING, config.STATE_RACE_PLAYING, config.STATE_PAUSED):
-        if gsm.game_state != config.STATE_PAUSED: # Update camera only if not paused
+    if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_TARGET_REACHED_CONTINUE_PLAYING, 
+                          config.STATE_RACE_PLAYING, config.STATE_DOGFIGHT_PLAYING, config.STATE_PAUSED):
+        if gsm.game_state != config.STATE_PAUSED: 
              camera_x_current = gsm.player.world_x - config.SCREEN_WIDTH // 2
              camera_y_current = gsm.player.world_y - config.SCREEN_HEIGHT // 2
 
         draw_endless_map(screen, camera_x_current, camera_y_current, gsm.current_map_offset_x, gsm.current_map_offset_y, gsm.tile_type_cache)
         gsm.player.draw_contrail(screen, camera_x_current, camera_y_current)
-        # Draw AI racers and Wingmen
-        for racer in gsm.ai_gliders: racer.draw_contrail(screen, camera_x_current, camera_y_current)
-        for wingman in gsm.wingmen_group: wingman.draw_contrail(screen, camera_x_current, camera_y_current)
+        for ags in gsm.ai_gliders: ags.draw_contrail(screen, camera_x_current, camera_y_current)
+        for wg in gsm.wingmen_group: wg.draw_contrail(screen, camera_x_current, camera_y_current)
+        for enemy in gsm.dogfight_enemies_group: enemy.draw_contrail(screen, camera_x_current, camera_y_current)
         
-        gsm.all_world_sprites.draw(screen) # This includes AI racers, Wingmen, Markers, Thermals
+        gsm.all_world_sprites.draw(screen) # Includes AI, Wingmen, Markers, Thermals, Bullets
+        
+        # Draw health bars for AI and Player in Dogfight
+        if gsm.game_state == config.STATE_DOGFIGHT_PLAYING or (gsm.game_state == config.STATE_PAUSED and gsm.game_state_before_pause == config.STATE_DOGFIGHT_PLAYING) :
+            gsm.player.draw_health_bar(screen, camera_x_current, camera_y_current)
+            for enemy in gsm.dogfight_enemies_group:
+                enemy.draw_health_bar(screen, camera_x_current, camera_y_current)
+        
         screen.blit(gsm.player.image, gsm.player.rect) 
         gsm.foreground_clouds_group.draw(screen) 
         
@@ -142,7 +166,6 @@ while running:
             draw_text(screen, f"Level: {gsm.current_level}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
             draw_text(screen, f"Target: {config.TARGET_HEIGHT_PER_LEVEL * gsm.current_level}m", config.HUD_FONT_SIZE_NORMAL, hm + 150, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
             draw_text(screen, f"Wingmen: {gsm.unlocked_wingmen_count}", config.HUD_FONT_SIZE_NORMAL, hm + 320, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
-
         elif config.current_game_mode == config.MODE_RACE:
             draw_text(screen, f"Lap: {min(gsm.player.laps_completed + 1, gsm.total_race_laps)}/{gsm.total_race_laps}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
             current_lap_time_display = 0.0
@@ -151,21 +174,23 @@ while running:
             elif gsm.player_race_lap_times and gsm.player.laps_completed < gsm.total_race_laps:
                  current_lap_time_display = gsm.player_race_lap_times[-1] if gsm.player_race_lap_times else 0.0
             draw_text(screen, f"Lap Time: {current_lap_time_display:.1f}s", config.HUD_FONT_SIZE_NORMAL, hm + 320, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
-            
             if gsm.race_course_markers and gsm.player.current_target_marker_index < len(gsm.race_course_markers) and gsm.game_state == config.STATE_RACE_PLAYING:
                 tm = gsm.race_course_markers[gsm.player.current_target_marker_index]
                 draw_text(screen, f"Marker {tm.number}: {int(math.hypot(gsm.player.world_x - tm.world_pos.x, gsm.player.world_y - tm.world_pos.y) / 10.0)} u", config.HUD_FONT_SIZE_NORMAL, hm + 150, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
-                
                 marker_dx = tm.world_pos.x - gsm.player.world_x; marker_dy = tm.world_pos.y - gsm.player.world_y
                 angle_to_marker_world_rad = math.atan2(marker_dy, marker_dx); angle_to_marker_world_deg = math.degrees(angle_to_marker_world_rad)
                 relative_angle_to_marker = (angle_to_marker_world_deg - gsm.player.heading + 360) % 360
-                
-                # Position Marker Dial to the left of Wind Vane
-                marker_dial_x = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 180 - 50 
+                marker_dial_x = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 180 
                 draw_dial(screen, marker_dial_x, hm + config.HUD_HEIGHT // 2 - 10, 22, relative_angle_to_marker, config.PASTEL_ACTIVE_MARKER_COLOR) 
+        elif config.current_game_mode == config.MODE_DOGFIGHT:
+            draw_text(screen, f"Round: {gsm.dogfight_current_round}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
+            enemies_left = gsm.dogfight_enemies_to_spawn_this_round - gsm.dogfight_enemies_defeated_this_round
+            draw_text(screen, f"Enemies: {enemies_left}", config.HUD_FONT_SIZE_NORMAL, hm + 150, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
+            draw_text(screen, f"Health: {gsm.player.health}", config.HUD_FONT_SIZE_NORMAL, hm + 320, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
+
 
         cyh += ls
-        timer_s = (current_ticks - gsm.level_timer_start_ticks) / 1000.0 if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_RACE_PLAYING) else gsm.time_taken_for_level
+        timer_s = (current_ticks - gsm.level_timer_start_ticks) / 1000.0 if gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_RACE_PLAYING, config.STATE_DOGFIGHT_PLAYING) else gsm.time_taken_for_level
         goal_text = " (Goal!)" if gsm.game_state == config.STATE_TARGET_REACHED_CONTINUE_PLAYING else ""
         draw_text(screen, f"Time: {timer_s:.1f}s{goal_text}", config.HUD_FONT_SIZE_NORMAL, hm, cyh, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME)
         
@@ -176,12 +201,13 @@ while running:
             draw_text(screen, "STALL!", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, hm + ls // 2 - 5, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
         
         wind_text_x_pos = config.SCREEN_WIDTH - config.MINIMAP_WIDTH - config.MINIMAP_MARGIN - 125 
-        draw_text(screen, f"Wind:", config.HUD_FONT_SIZE_SMALL, wind_text_x_pos - 50, hm + config.HUD_HEIGHT // 2 - 10, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME) 
-        draw_weather_vane(screen, config.current_wind_speed_x, config.current_wind_speed_y, wind_text_x_pos, hm + config.HUD_HEIGHT // 2 - 10 , 22) 
+        if config.current_game_mode != config.MODE_DOGFIGHT: # Only show wind vane if not in dogfight
+            draw_text(screen, f"Wind:", config.HUD_FONT_SIZE_SMALL, wind_text_x_pos - 50, hm + config.HUD_HEIGHT // 2 - 10, config.PASTEL_TEXT_COLOR_HUD, font_name=config.HUD_FONT_NAME) 
+            draw_weather_vane(screen, config.current_wind_speed_x, config.current_wind_speed_y, wind_text_x_pos, hm + config.HUD_HEIGHT // 2 - 10 , 22) 
         
         et = "ESC for Menu"
         if gsm.game_state == config.STATE_TARGET_REACHED_CONTINUE_PLAYING: et = "ESC for Options"
-        elif gsm.game_state == config.STATE_PLAYING_FREE_FLY or gsm.game_state == config.STATE_RACE_PLAYING: et = "ESC to Pause"
+        elif gsm.game_state in (config.STATE_PLAYING_FREE_FLY, config.STATE_RACE_PLAYING, config.STATE_DOGFIGHT_PLAYING): et = "ESC to Pause"
         draw_text(screen, et, config.HUD_FONT_SIZE_SMALL, config.SCREEN_WIDTH - 150, config.SCREEN_HEIGHT - 30, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True) 
         
         draw_height_indicator_hud(screen, gsm.player.height, config.TARGET_HEIGHT_PER_LEVEL * gsm.current_level if config.current_game_mode == config.MODE_FREE_FLY else gsm.player.height + 100, gsm.player.vertical_speed, clock, config.current_game_mode)
@@ -204,12 +230,14 @@ while running:
         draw_target_reached_options_screen(screen, gsm.current_level, gsm.time_taken_for_level); gsm.foreground_clouds_group.draw(screen)
     elif gsm.game_state == config.STATE_POST_GOAL_MENU:
         draw_post_goal_menu_screen(screen, gsm.current_level); gsm.foreground_clouds_group.draw(screen)
-    elif gsm.game_state == config.STATE_RACE_COMPLETE: # Should not be reached if STATE_RACE_POST_OPTIONS is used
+    elif gsm.game_state == config.STATE_RACE_POST_OPTIONS: # Changed from STATE_RACE_COMPLETE
         draw_race_post_options_screen(screen, gsm.time_taken_for_level, gsm.player_race_lap_times); gsm.foreground_clouds_group.draw(screen)
-    elif gsm.game_state == config.STATE_RACE_POST_OPTIONS:
-        draw_race_post_options_screen(screen, gsm.time_taken_for_level, gsm.player_race_lap_times); gsm.foreground_clouds_group.draw(screen)
-    elif gsm.game_state == config.STATE_GAME_OVER:
-        draw_game_over_screen_content(screen, gsm.final_score, gsm.current_level, gsm.high_scores, config.current_game_mode, gsm.total_race_laps); gsm.foreground_clouds_group.draw(screen) 
+    elif gsm.game_state == config.STATE_DOGFIGHT_ROUND_COMPLETE:
+        draw_dogfight_round_complete_screen(screen, gsm.dogfight_current_round, gsm.time_taken_for_level); gsm.foreground_clouds_group.draw(screen)
+    elif gsm.game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE:
+        draw_dogfight_game_over_continue_screen(screen, gsm.dogfight_current_round); gsm.foreground_clouds_group.draw(screen)
+    elif gsm.game_state == config.STATE_GAME_OVER: # General game over if not dogfight retry
+        draw_game_over_screen_content(screen, gsm.final_score, gsm.current_level, gsm.high_scores, config.current_game_mode, gsm.total_race_laps, gsm.dogfight_current_round); gsm.foreground_clouds_group.draw(screen) 
     
     pygame.display.flip()
 pygame.quit()

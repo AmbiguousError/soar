@@ -48,7 +48,7 @@ class Minimap:
         mini_y = self.height / 2 + rel_y * scale
         return int(mini_x), int(mini_y)
 
-    def draw(self, surface, player_glider, ai_gliders_list, course_markers):
+    def draw(self, surface, player_glider, ai_gliders_list, course_markers): # Pass font_cache
         self.surface.fill(config.PASTEL_MINIMAP_BACKGROUND)
         player_mini_x, player_mini_y = self.width // 2, self.height // 2
         pygame.draw.circle(self.surface, config.PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
@@ -183,13 +183,16 @@ def draw_start_screen_content(surface):
     info_y += line_spacing
     draw_text(surface, "- Race: Compete against AI through challenging courses.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
               config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing
+    draw_text(surface, "- Dogfight: Shoot down enemy waves!", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     info_y += line_spacing * 1.5
 
     draw_text(surface, "Press ENTER to Begin Your Flight", 30, config.SCREEN_WIDTH // 2, info_y + 40, 
               config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     
     controls_y = info_y + 100
-    draw_text(surface, "Controls: UP/DOWN Arrows for Speed | LEFT/RIGHT Arrows to Bank", 20, config.SCREEN_WIDTH // 2, controls_y, 
+    draw_text(surface, "Controls: UP/DOWN Arrows for Speed | LEFT/RIGHT Arrows to Bank | SPACE to Shoot (Dogfight)", 20, config.SCREEN_WIDTH // 2, controls_y, 
               config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
 
 
@@ -198,7 +201,7 @@ def draw_difficulty_select_screen(surface, selected_option_idx):
     draw_text(surface, "Select Difficulty", 56, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 5, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     option_spacing = 100
     start_y = config.SCREEN_HEIGHT // 2 - option_spacing
-    difficulties_display = [ # Updated descriptions for turning
+    difficulties_display = [
         ("N00b", "(More Thermals, Most Agile Turning)", config.DIFFICULTY_NOOB),
         ("Easy", "(Stronger Thermals, Agile Turning)", config.DIFFICULTY_EASY),
         ("Normal", "(Standard Challenge, Larger Turning Circle)", config.DIFFICULTY_NORMAL)
@@ -211,17 +214,22 @@ def draw_difficulty_select_screen(surface, selected_option_idx):
 
 def draw_mode_select_screen(surface, selected_option_idx): 
     surface.fill(config.PASTEL_DARK_GRAY)
-    draw_text(surface, "Select Mode", 56, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
+    draw_text(surface, "Select Mode", 56, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     modes_display = [
         ("Free Fly", "(Explore & Reach Altitude Goals)", config.MODE_FREE_FLY),
-        ("Race", "(Fly Through Markers Against AI)", config.MODE_RACE)
+        ("Race", "(Fly Through Markers Against AI)", config.MODE_RACE),
+        ("Dogfight", "(Survive Enemy Waves!)", config.MODE_DOGFIGHT) # Added Dogfight
     ]
+    
+    option_base_y = config.SCREEN_HEIGHT // 2 - (len(modes_display) // 2 * 80) # Center options
+    if len(modes_display) % 2 == 0: option_base_y -= 40 # Adjust if even number of options
+
     for i, (name, desc, mode_const) in enumerate(modes_display):
         color = config.PASTEL_WHITE if selected_option_idx == mode_const else config.PASTEL_GRAY
-        y_pos = config.SCREEN_HEIGHT // 2 - 30 + i * 100 
+        y_pos = option_base_y + i * 80 
         draw_text(surface, name, 48, config.SCREEN_WIDTH // 2, y_pos, color, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
         draw_text(surface, desc, 22, config.SCREEN_WIDTH // 2, y_pos + 35, color, font_name=config.HUD_FONT_NAME, center=True) 
-    draw_text(surface, "Use UP/DOWN keys, ENTER to confirm", 22, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 3 // 4 + 50, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    draw_text(surface, "Use UP/DOWN keys, ENTER to confirm", 22, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 3 // 4 + 80, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
 def draw_laps_select_screen(surface, selected_lap_idx, lap_choices_list): 
     surface.fill(config.PASTEL_DARK_GRAY)
@@ -274,8 +282,6 @@ def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list):
     draw_text(surface, "Q: Main Menu", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
 def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): 
-    # This function is now effectively replaced by draw_race_post_options_screen
-    # but kept in case of direct calls or future use.
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 40, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
@@ -285,8 +291,22 @@ def draw_race_complete_screen(surface, total_time_seconds, lap_times_list):
             draw_text(surface, f"Lap {i+1}: {lap_time:.1f}s", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 55 + (i * 28), config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press ENTER for Main Menu", 32, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 5 // 6, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
+def draw_dogfight_round_complete_screen(surface, round_num, time_taken):
+    surface.fill(config.PASTEL_DARK_GRAY)
+    draw_text(surface, f"Round {round_num} Complete!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True)
+    draw_text(surface, f"Time: {time_taken:.1f}s", 36, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+    draw_text(surface, "Press N for Next Round", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-def draw_game_over_screen_content (surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data): 
+def draw_dogfight_game_over_continue_screen(surface, round_reached):
+    surface.fill(config.PASTEL_DARK_GRAY)
+    draw_text(surface, "Pilot Down!", 72, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True)
+    draw_text(surface, f"You reached Round: {round_reached}", 36, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+    draw_text(surface, "Press C to Continue (Retry Round)", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+
+
+def draw_game_over_screen_content(surface, final_player_height, level_reached, high_scores_data, current_game_mode_data, total_laps_data, dogfight_round_reached=0): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "GAME OVER", 72, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4, config.PASTEL_RED, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     y_offset = config.SCREEN_HEIGHT // 2 - 80 
@@ -299,5 +319,9 @@ def draw_game_over_screen_content (surface, final_player_height, level_reached, 
              draw_text(surface, f"Best Race ({total_laps_data} Laps): {high_scores_data['best_total_race_times'][total_laps_data]:.1f}s", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += 30
         if high_scores_data["best_lap_time_race"] != float('inf'):
             draw_text(surface, f"Best Lap: {high_scores_data['best_lap_time_race']:.1f}s", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += 30
+    elif current_game_mode_data == config.MODE_DOGFIGHT:
+        draw_text(surface, f"Survived to Round: {dogfight_round_reached}", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += 35
+        # Could add high score for dogfight rounds later
+
     draw_text(surface, f"Final Height: {int(final_player_height)}m", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += 40
     draw_text(surface, "Press ENTER for Menu", 32, config.SCREEN_WIDTH // 2, y_offset + 20, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)

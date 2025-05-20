@@ -6,9 +6,49 @@ import math
 import random
 import config # Import constants
 
+# --- Bullet Class ---
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, heading, owner_glider):
+        super().__init__()
+        self.owner = owner_glider # The glider that fired this bullet
+        self.image = pygame.Surface([6, 3], pygame.SRCALPHA) # Small rectangular bullet
+        self.image.fill(config.BULLET_COLOR)
+        self.original_image = self.image
+        self.rect = self.image.get_rect(center=(x, y))
+        
+        self.world_x = float(x)
+        self.world_y = float(y)
+        self.heading = heading # Degrees
+        self.speed = config.BULLET_SPEED
+        self.range_traveled = 0
+        self.max_range = config.BULLET_RANGE
+
+        # Rotate bullet to match heading
+        self.image = pygame.transform.rotate(self.original_image, -self.heading)
+        self.rect = self.image.get_rect(center=(self.world_x, self.world_y))
+
+
+    def update(self, cam_x, cam_y):
+        heading_rad = math.radians(self.heading)
+        self.world_x += self.speed * math.cos(heading_rad)
+        self.world_y += self.speed * math.sin(heading_rad)
+        self.range_traveled += self.speed
+
+        if self.range_traveled > self.max_range:
+            self.kill() # Remove bullet if out of range
+
+        self.rect.centerx = self.world_x - cam_x
+        self.rect.centery = self.world_y - cam_y
+
+        # Kill if off-screen (basic culling)
+        if not config.SCREEN_WIDTH * -0.1 < self.rect.centerx < config.SCREEN_WIDTH * 1.1 or \
+           not config.SCREEN_HEIGHT * -0.1 < self.rect.centery < config.SCREEN_HEIGHT * 1.1:
+            self.kill()
+
+
 # --- Glider Base Class ---
 class GliderBase(pygame.sprite.Sprite):
-    def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0):
+    def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0, max_health=100): # Added max_health
         super().__init__()
         self.body_color = body_color 
         self.wing_color = wing_color 
@@ -35,15 +75,12 @@ class GliderBase(pygame.sprite.Sprite):
         
         fuselage_y_top = (canvas_height - self.fuselage_thickness) / 2
         pygame.draw.rect(self.original_image, self.body_color, (0, fuselage_y_top, self.fuselage_length, self.fuselage_thickness))
-        
         wing_x_pos = (self.fuselage_length - self.wing_chord) * 0.65 
         wing_y_pos = (canvas_height - self.wing_span) / 2 
         pygame.draw.rect(self.original_image, self.wing_color, (wing_x_pos, wing_y_pos, self.wing_chord, self.wing_span))
-        
         tail_plane_x_pos = 0 
         tail_plane_y_top = (canvas_height - self.tail_plane_span) / 2
         pygame.draw.rect(self.original_image, self.wing_color, (tail_plane_x_pos, tail_plane_y_top, self.tail_plane_chord, self.tail_plane_span))
-        
         fin_base_y_center = fuselage_y_top + self.fuselage_thickness / 2 
         fin_bottom_y = fin_base_y_center - self.fuselage_thickness / 2 
         fin_tip_y = fin_bottom_y - self.tail_fin_height
@@ -65,8 +102,14 @@ class GliderBase(pygame.sprite.Sprite):
         self.speed = config.INITIAL_SPEED 
         self.trail_points = [] 
         self.contrail_frame_counter = 0
-        self.current_target_marker_index = 0 # Used by race AI
-        self.laps_completed = 0 # Used by race AI
+        self.current_target_marker_index = 0 
+        self.laps_completed = 0 
+
+        # Combat attributes
+        self.max_health = max_health
+        self.health = self.max_health
+        self.shoot_cooldown_timer = 0
+        self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN # Default, can be overridden by subclasses
 
     def update_sprite_rotation_and_position(self, cam_x=None, cam_y=None):
         self.image = pygame.transform.rotate(self.original_image, -self.heading) 
@@ -76,7 +119,6 @@ class GliderBase(pygame.sprite.Sprite):
             self.rect = self.image.get_rect(center=(self.world_x - cam_x, self.world_y - cam_y))
         else:
              self.rect = self.image.get_rect(center=(self.world_x, self.world_y))
-
 
     def update_contrail(self):
         heading_rad = math.radians(self.heading)
@@ -109,14 +151,56 @@ class GliderBase(pygame.sprite.Sprite):
         self.world_x += knockback_dist * math.cos(knockback_angle)
         self.world_y += knockback_dist * math.sin(knockback_angle)
 
+    def take_damage(self, amount):
+        self.health -= amount
+        if self.health <= 0:
+            self.health = 0
+            self.kill() # Remove from all sprite groups if health is 0
+            return True # Indicates glider is destroyed
+        return False
+
+    def shoot(self, bullets_group, all_sprites_group):
+        if self.shoot_cooldown_timer <= 0:
+            heading_rad = math.radians(self.heading)
+            # Bullet starts slightly in front of the glider's nose
+            bullet_start_x = self.world_x + (self.fuselage_length / 1.8) * math.cos(heading_rad) # Adjusted offset
+            bullet_start_y = self.world_y + (self.fuselage_length / 1.8) * math.sin(heading_rad)
+            
+            new_bullet = Bullet(bullet_start_x, bullet_start_y, self.heading, self)
+            bullets_group.add(new_bullet)
+            all_sprites_group.add(new_bullet)
+            self.shoot_cooldown_timer = self.shoot_cooldown_duration
+            return True # Shot fired
+        return False # Cooldown active
+
+    def draw_health_bar(self, surface, cam_x, cam_y):
+        if self.health > 0:
+            bar_x = self.world_x - cam_x - config.HEALTH_BAR_WIDTH // 2
+            bar_y = self.world_y - cam_y - self.rect.height // 2 - 10 # Above the glider
+            
+            health_ratio = self.health / self.max_health
+            current_bar_width = int(config.HEALTH_BAR_WIDTH * health_ratio)
+            
+            # Determine color based on health
+            bar_color = config.HEALTH_BAR_COLOR_BAD
+            if health_ratio > 0.66:
+                bar_color = config.HEALTH_BAR_COLOR_GOOD
+            elif health_ratio > 0.33:
+                bar_color = config.HEALTH_BAR_COLOR_MEDIUM
+
+            pygame.draw.rect(surface, config.HEALTH_BAR_BACKGROUND_COLOR, (bar_x, bar_y, config.HEALTH_BAR_WIDTH, config.HEALTH_BAR_HEIGHT))
+            pygame.draw.rect(surface, bar_color, (bar_x, bar_y, current_bar_width, config.HEALTH_BAR_HEIGHT))
+
+
 # --- PlayerGlider Class ---
 class PlayerGlider(GliderBase):
     def __init__(self):
-        super().__init__(config.PASTEL_GLIDER_BODY, config.PASTEL_GLIDER_WING)
+        super().__init__(config.PASTEL_GLIDER_BODY, config.PASTEL_GLIDER_WING, max_health=config.PLAYER_MAX_HEALTH)
         self.rect = self.image.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2))
         self.previous_height = config.INITIAL_HEIGHT 
         self.vertical_speed = 0.0
         self.current_lap_start_ticks = 0
+        self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN
 
     def reset(self, start_height=config.INITIAL_HEIGHT):
         self.world_x = 0.0
@@ -132,9 +216,11 @@ class PlayerGlider(GliderBase):
         self.contrail_frame_counter = 0
         self.current_target_marker_index = 0
         self.laps_completed = 0
+        self.health = self.max_health # Reset health
+        self.shoot_cooldown_timer = 0
         self.update_sprite_rotation_and_position() 
 
-    def update(self, keys, game_data): 
+    def update(self, keys, game_data, bullets_group_ref, all_sprites_group_ref): # Added bullet groups
         current_wind_speed_x = game_data["current_wind_speed_x"]
         current_wind_speed_y = game_data["current_wind_speed_y"]
         game_state = game_data["game_state"]
@@ -145,9 +231,16 @@ class PlayerGlider(GliderBase):
         high_scores = game_data["high_scores"]
         
         self.previous_height = self.height
+        if self.shoot_cooldown_timer > 0:
+            self.shoot_cooldown_timer -= 1
 
         if game_data["current_game_mode"] == config.MODE_FREE_FLY and self.height > high_scores["max_altitude_free_fly"]:
             high_scores["max_altitude_free_fly"] = self.height
+
+        # Shooting input (only if in dogfight mode)
+        if game_data["current_game_mode"] == config.MODE_DOGFIGHT and keys[pygame.K_SPACE]:
+            self.shoot(bullets_group_ref, all_sprites_group_ref)
+
 
         if keys[pygame.K_UP]: 
             self.speed += config.ACCELERATION
@@ -239,17 +332,17 @@ class PlayerGlider(GliderBase):
 # --- AI Glider Class ---
 class AIGlider(GliderBase):
     def __init__(self, start_world_x, start_world_y, body_color, wing_color, personality_profile=None, ai_mode="race", player_ref=None):
-        super().__init__(body_color, wing_color, start_world_x, start_world_y)
+        max_hp = config.AI_MAX_HEALTH if ai_mode != "wingman" else config.PLAYER_MAX_HEALTH # Wingmen could be tougher
+        super().__init__(body_color, wing_color, start_world_x, start_world_y, max_health=max_hp)
         
-        self.ai_mode = ai_mode # "race" or "wingman"
-        self.player_ref = player_ref # Reference to player object for wingman mode
+        self.ai_mode = ai_mode 
+        self.player_ref = player_ref 
 
         self.personality = personality_profile if personality_profile else {}
         self.speed_factor = self.personality.get("speed_factor", 1.0)
-        self.turn_factor = self.personality.get("turn_factor", 1.0) # Affects base turn rate
-        self.altitude_preference_offset = self.personality.get("altitude_offset", random.uniform(-30, 30)) # Slight altitude variation preference
+        self.turn_factor = self.personality.get("turn_factor", 1.0) 
+        self.altitude_preference_offset = self.personality.get("altitude_offset", random.uniform(-30, 30)) 
 
-        # Personalized base stats
         self.base_min_speed = config.AI_BASE_SPEED_MIN * self.speed_factor
         self.base_max_speed = config.AI_BASE_SPEED_MAX * self.speed_factor
         self.base_turn_rate_scalar = config.AI_BASE_TURN_RATE_SCALAR * self.turn_factor
@@ -257,20 +350,23 @@ class AIGlider(GliderBase):
         self.target_altitude = config.AI_TARGET_RACE_ALTITUDE + self.altitude_preference_offset
         if self.ai_mode == "wingman" and self.player_ref:
             self.target_altitude = self.player_ref.height + self.altitude_preference_offset
-
+        elif self.ai_mode == "dogfight_enemy" and self.player_ref:
+             self.target_altitude = self.player_ref.height # Try to match player altitude initially
 
         self.speed = random.uniform(self.base_min_speed, self.base_max_speed)
         self.height = self.target_altitude + random.uniform(-50, 50) 
         self.base_target_speed = random.uniform(self.base_min_speed, self.base_max_speed) 
         self.target_speed = self.base_target_speed
         self.speed_update_timer = random.randint(0, config.AI_TARGET_SPEED_UPDATE_INTERVAL // 2)
-        self.wingman_offset_angle = random.uniform(-math.pi / 4, math.pi / 4) # For formation spread
-        self.wingman_follow_dist_x = config.WINGMAN_FOLLOW_DISTANCE_X + random.uniform(-10,10)
-        self.wingman_follow_dist_y = config.WINGMAN_FOLLOW_DISTANCE_Y_BASE * (1 if random.random() < 0.5 else -1) + random.uniform(-15,15)
+        self.shoot_cooldown_duration = config.AI_SHOOT_COOLDOWN_BASE + random.randint(-10, 10) # Slight variation in RoF
+
+        # Wingman specific
+        self.wingman_offset_angle = random.uniform(-math.pi / 6, math.pi / 6) # Tighter spread
+        self.wingman_follow_dist_x = config.WINGMAN_FOLLOW_DISTANCE_X + random.uniform(-15,15)
+        self.wingman_follow_dist_y = config.WINGMAN_FOLLOW_DISTANCE_Y_BASE * (1 if random.random() < 0.5 else -1) + random.uniform(-20,20)
 
 
     def update_race_behavior(self, race_markers_list, dist_to_marker, angle_diff):
-        # Speed control for racing
         if dist_to_marker < config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE:
             self.target_speed = self.base_min_speed + (self.base_max_speed - self.base_min_speed) * \
                                 (dist_to_marker / config.AI_MARKER_APPROACH_SLOWDOWN_DISTANCE) * \
@@ -278,9 +374,9 @@ class AIGlider(GliderBase):
             self.target_speed = max(self.base_min_speed * 0.8, self.target_speed) 
             self.speed_update_timer = 0 
         elif dist_to_marker > config.AI_STRAIGHT_BOOST_MIN_DISTANCE and abs(angle_diff) < config.AI_STRAIGHT_BOOST_THRESHOLD_ANGLE:
-            self.target_speed = self.base_max_speed # Boost on straights
+            self.target_speed = self.base_max_speed 
             self.speed_update_timer = 0 
-        else: # General cruising speed adjustment
+        else: 
             self.speed_update_timer += 1
             if self.speed_update_timer >= config.AI_TARGET_SPEED_UPDATE_INTERVAL:
                 speed_range = self.base_max_speed - self.base_min_speed
@@ -290,75 +386,105 @@ class AIGlider(GliderBase):
                 self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
                 self.speed_update_timer = 0
         
-        # Altitude control for racing
         alt_diff = self.target_altitude - self.height 
         self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE 
 
     def update_wingman_behavior(self):
-        if not self.player_ref: return
+        if not self.player_ref: return 0,0 # Should not happen if mode is wingman
 
-        # Calculate target position relative to player
         player_heading_rad = math.radians(self.player_ref.heading)
         
-        # Offset behind and to the side of the player
-        offset_x_local = self.wingman_follow_dist_x 
-        offset_y_local = self.wingman_follow_dist_y
-        
-        # Rotate offset by player's heading to get world offset
-        target_rel_x = offset_x_local * math.cos(player_heading_rad) - offset_y_local * math.sin(player_heading_rad)
-        target_rel_y = offset_x_local * math.sin(player_heading_rad) + offset_y_local * math.cos(player_heading_rad)
-            
-        target_world_x = self.player_ref.world_x + target_rel_x
-        target_world_y = self.player_ref.world_y + target_rel_y
+        # Target position relative to player, rotated by player's heading
+        target_x_local = self.wingman_follow_dist_x * math.cos(self.wingman_offset_angle) - self.wingman_follow_dist_y * math.sin(self.wingman_offset_angle)
+        target_y_local = self.wingman_follow_dist_x * math.sin(self.wingman_offset_angle) + self.wingman_follow_dist_y * math.cos(self.wingman_offset_angle)
+
+        target_world_x = self.player_ref.world_x + (target_x_local * math.cos(player_heading_rad) - target_y_local * math.sin(player_heading_rad))
+        target_world_y = self.player_ref.world_y + (target_x_local * math.sin(player_heading_rad) + target_y_local * math.cos(player_heading_rad))
 
         dx = target_world_x - self.world_x
         dy = target_world_y - self.world_y
         
-        # Target speed similar to player, with some variation
-        self.target_speed = self.player_ref.speed * self.speed_factor + random.uniform(-0.5, 0.5)
+        self.target_speed = self.player_ref.speed * self.speed_factor * 0.9 # Try to fly a bit slower than player
         self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
 
-        # Altitude: try to match player's height + personal offset
         self.target_altitude = self.player_ref.height + self.altitude_preference_offset
         alt_diff = self.target_altitude - self.height
         self.height += alt_diff * config.WINGMAN_ALTITUDE_CORRECTION_RATE
+        return dx, dy
 
-        return dx, dy # Return dx, dy for steering
+    def update_dogfight_enemy_behavior(self, bullets_group_ref, all_sprites_group_ref):
+        if not self.player_ref: return 0,0
 
-    def update(self, cam_x, cam_y, game_entities, total_laps_in_race, current_game_state): # game_entities can be markers or player
+        dx = self.player_ref.world_x - self.world_x
+        dy = self.player_ref.world_y - self.world_y
+        dist_to_player = math.hypot(dx, dy)
+        
+        # Basic: try to match player speed and altitude, with some variation
+        self.target_speed = self.player_ref.speed * self.speed_factor + random.uniform(-1,1)
+        self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
+
+        self.target_altitude = self.player_ref.height + self.altitude_preference_offset
+        alt_diff = self.target_altitude - self.height
+        self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE * 1.5 # More aggressive altitude change
+
+        # Shooting logic
+        if dist_to_player < config.DOGFIGHT_AI_SHOOTING_RANGE:
+            angle_to_player_rad = math.atan2(dy, dx)
+            angle_to_player_deg = math.degrees(angle_to_player_rad)
+            heading_diff = (angle_to_player_deg - self.heading + 540) % 360 - 180
+            if abs(heading_diff) < config.DOGFIGHT_AI_SHOOTING_CONE_ANGLE:
+                self.shoot(bullets_group_ref, all_sprites_group_ref)
+        return dx, dy
+
+
+    def update(self, cam_x, cam_y, target_or_player_ref, total_laps_in_race, current_game_state, bullets_group_ref=None, all_sprites_group_ref=None): # Added bullet groups
+        if self.shoot_cooldown_timer > 0:
+            self.shoot_cooldown_timer -=1
+
+        dx, dy = 0, 0 # Default delta for steering
+        angle_diff = 0 # Default angle difference
+
         if self.ai_mode == "race":
-            if not game_entities or current_game_state != config.STATE_RACE_PLAYING: 
+            if not target_or_player_ref or current_game_state != config.STATE_RACE_PLAYING: 
                 self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
-            race_markers_list = game_entities
+            race_markers_list = target_or_player_ref
             target_marker = race_markers_list[self.current_target_marker_index]
-            dx = target_marker.world_pos.x - self.world_x
-            dy = target_marker.world_pos.y - self.world_y
-            dist_to_marker = math.hypot(dx, dy)
-            
-            target_angle_rad = math.atan2(dy, dx)
+            dx_marker = target_marker.world_pos.x - self.world_x
+            dy_marker = target_marker.world_pos.y - self.world_y
+            dist_to_marker = math.hypot(dx_marker, dy_marker)
+            target_angle_rad = math.atan2(dy_marker, dx_marker)
             target_angle_deg = math.degrees(target_angle_rad)
-            angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180 # Shortest angle
-            
+            angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180
             self.update_race_behavior(race_markers_list, dist_to_marker, angle_diff)
-            
             if dist_to_marker < target_marker.world_radius: 
                 self.current_target_marker_index += 1
                 if self.current_target_marker_index >= len(race_markers_list): 
                     self.laps_completed += 1; self.current_target_marker_index = 0
-
+        
         elif self.ai_mode == "wingman":
-            if not self.player_ref or current_game_state != config.STATE_PLAYING_FREE_FLY:
+            if not self.player_ref or current_game_state != config.STATE_PLAYING_FREE_FLY: # Wingmen only in free fly
                 self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
-            
             dx, dy = self.update_wingman_behavior()
+            target_angle_rad = math.atan2(dy, dx) # atan2 handles signs correctly
+            target_angle_deg = math.degrees(target_angle_rad)
+            angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180
+        
+        elif self.ai_mode == "dogfight_enemy":
+            if not self.player_ref or current_game_state != config.STATE_DOGFIGHT_PLAYING:
+                self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
+            dx, dy = self.update_dogfight_enemy_behavior(bullets_group_ref, all_sprites_group_ref)
             target_angle_rad = math.atan2(dy, dx)
             target_angle_deg = math.degrees(target_angle_rad)
             angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180
-        else: # Should not happen
+        else:
             self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
 
         # Common steering and movement
-        turn_this_frame = angle_diff * self.base_turn_rate_scalar * config.WINGMAN_CASUALNESS_FACTOR if self.ai_mode == "wingman" else angle_diff * self.base_turn_rate_scalar
+        turn_rate = self.base_turn_rate_scalar
+        if self.ai_mode == "wingman":
+            turn_rate *= config.WINGMAN_CASUALNESS_FACTOR # Slower, more casual turning for wingmen
+        
+        turn_this_frame = angle_diff * turn_rate
         self.heading = (self.heading + turn_this_frame) % 360
         
         if self.speed < self.target_speed: self.speed += config.ACCELERATION * 0.5 
