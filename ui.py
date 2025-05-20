@@ -173,7 +173,7 @@ def draw_start_screen_content(surface):
     info_y += line_spacing
     draw_text(surface, "Use thermals to gain altitude and explore.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
               config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
-    info_y += line_spacing * 1.5 # Extra space
+    info_y += line_spacing * 1.5 
 
     draw_text(surface, "Game Modes:", info_font_size + 2, config.SCREEN_WIDTH // 2, info_y, 
               config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
@@ -198,10 +198,10 @@ def draw_difficulty_select_screen(surface, selected_option_idx):
     draw_text(surface, "Select Difficulty", 56, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 5, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     option_spacing = 100
     start_y = config.SCREEN_HEIGHT // 2 - option_spacing
-    difficulties_display = [
-        ("N00b", "(More Thermals, Agile Turning)", config.DIFFICULTY_NOOB),
-        ("Easy", "(Stronger Thermals, Easier Turning)", config.DIFFICULTY_EASY),
-        ("Normal", "(Standard Challenge & Turning)", config.DIFFICULTY_NORMAL)
+    difficulties_display = [ # Updated descriptions for turning
+        ("N00b", "(More Thermals, Most Agile Turning)", config.DIFFICULTY_NOOB),
+        ("Easy", "(Stronger Thermals, Agile Turning)", config.DIFFICULTY_EASY),
+        ("Normal", "(Standard Challenge, Larger Turning Circle)", config.DIFFICULTY_NORMAL)
     ]
     for i, (name, desc, diff_const) in enumerate(difficulties_display):
         color = config.PASTEL_WHITE if selected_option_idx == diff_const else config.PASTEL_GRAY
@@ -274,8 +274,8 @@ def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list):
     draw_text(surface, "Q: Main Menu", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
 def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): 
-    # This function might now be redundant if all race completions go to STATE_RACE_POST_OPTIONS
-    # However, keeping it for now in case it's used by a different flow path.
+    # This function is now effectively replaced by draw_race_post_options_screen
+    # but kept in case of direct calls or future use.
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 40, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
