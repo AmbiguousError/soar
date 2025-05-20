@@ -81,13 +81,4 @@ The project is organized into the following Python modules:
     * `Q`: Quit to Main Menu (from Pause or other option screens).
     * `R`: Resume Flying (from Post-Goal menu).
 
-## Future Enhancements (Ideas)
-
-* Persistent high scores (saving/loading from a file).
-* Sound effects and music.
-* More varied thermal types or ridge lift.
-* More complex AI behaviors (e.g., AI using thermals).
-* Additional glider types with different flight characteristics.
-* More detailed terrain features.
-* Weather effects (e.g., rain, stronger gusts).
 
