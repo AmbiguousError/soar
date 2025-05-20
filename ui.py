@@ -159,10 +159,39 @@ def draw_weather_vane(surface, wind_x, wind_y, center_x, center_y, radius=22, ma
 # --- Screen Drawing Functions ---
 def draw_start_screen_content(surface):
     surface.fill(config.PASTEL_DARK_GRAY) 
-    draw_text(surface, "Pastel Glider", 72, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 - 20, config.PASTEL_PLAINS, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
-    draw_text(surface, "Press ENTER to Begin", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 60, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
-    draw_text(surface, "UP/DOWN: Speed | L/R: Bank", 22, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 3 // 4, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
-    draw_text(surface, "Explore the skies, use thermals or race the course!", 22, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT * 3 // 4 + 30, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+    
+    title_y = config.SCREEN_HEIGHT // 4 - 50
+    draw_text(surface, "Pastel Glider", 72, config.SCREEN_WIDTH // 2, title_y, 
+              config.PASTEL_PLAINS, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
+
+    info_y = title_y + 80
+    line_spacing = 28
+    info_font_size = 22
+
+    draw_text(surface, "Welcome, pilot! Soar through endless skies.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing
+    draw_text(surface, "Use thermals to gain altitude and explore.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing * 1.5 # Extra space
+
+    draw_text(surface, "Game Modes:", info_font_size + 2, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing
+    draw_text(surface, "- Free Fly: Reach altitude goals & unlock wingmen.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing
+    draw_text(surface, "- Race: Compete against AI through challenging courses.", info_font_size, config.SCREEN_WIDTH // 2, info_y, 
+              config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+    info_y += line_spacing * 1.5
+
+    draw_text(surface, "Press ENTER to Begin Your Flight", 30, config.SCREEN_WIDTH // 2, info_y + 40, 
+              config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
+    
+    controls_y = info_y + 100
+    draw_text(surface, "Controls: UP/DOWN Arrows for Speed | LEFT/RIGHT Arrows to Bank", 20, config.SCREEN_WIDTH // 2, controls_y, 
+              config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
+
 
 def draw_difficulty_select_screen(surface, selected_option_idx): 
     surface.fill(config.PASTEL_DARK_GRAY)
@@ -225,7 +254,7 @@ def draw_pause_menu_screen(surface):
     draw_text(surface, "Press C to Continue", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list): # Renamed from draw_race_complete_screen
+def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list): 
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 - 30, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 36, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 4 + 30, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
@@ -244,8 +273,9 @@ def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list): 
     y_offset += 40
     draw_text(surface, "Q: Main Menu", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-# This function is still needed if STATE_RACE_COMPLETE is ever directly drawn (though current logic flows to POST_OPTIONS)
 def draw_race_complete_screen(surface, total_time_seconds, lap_times_list): 
+    # This function might now be redundant if all race completions go to STATE_RACE_POST_OPTIONS
+    # However, keeping it for now in case it's used by a different flow path.
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, "Race Finished!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3 - 20, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True, shadow_color=config.PASTEL_BLACK)
     draw_text(surface, f"Total Time: {total_time_seconds:.1f}s", 40, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 20, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
