@@ -4,6 +4,7 @@
 import pygame
 import math
 import config # Import constants
+from sprites import Runway, DeliveryCheckpoint, RaceMarker # ADD THIS LINE
 
 font_cache = {}
 def get_cached_font(font_name, size):
@@ -31,6 +32,7 @@ def draw_text(surface, text, size, x, y, color=config.PASTEL_WHITE, font_name=No
         surface.blit(shadow_surface, (text_rect.x + shadow_offset[0], text_rect.y + shadow_offset[1]))
     surface.blit(text_surface, text_rect)
 
+
 class Minimap:
     def __init__(self, width, height, margin):
         self.width = width
@@ -38,61 +40,62 @@ class Minimap:
         self.margin = margin
         self.surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         self.rect = self.surface.get_rect(topright=(config.SCREEN_WIDTH - self.margin, self.margin + config.HUD_HEIGHT))
-        self.world_bounds_view_radius = 3000 # How much of the world the minimap shows around player
+        self.world_bounds_view_radius = 3000 
 
     def world_to_minimap(self, world_x, world_y, player_world_x, player_world_y):
-        scale = self.width / (2 * self.world_bounds_view_radius) # Scale factor
-        rel_x = world_x - player_world_x # Relative world x of object to player
-        rel_y = world_y - player_world_y # Relative world y
-        mini_x = self.width / 2 + rel_x * scale # Minimap x
-        mini_y = self.height / 2 + rel_y * scale # Minimap y
+        scale = self.width / (2 * self.world_bounds_view_radius) 
+        rel_x = world_x - player_world_x 
+        rel_y = world_y - player_world_y 
+        mini_x = self.width / 2 + rel_x * scale 
+        mini_y = self.height / 2 + rel_y * scale 
         return int(mini_x), int(mini_y)
 
-    def draw(self, surface, player_glider, ai_gliders_list, course_markers_or_runways, is_delivery_mode=False):
+    def draw(self, surface, player_glider, ai_gliders_list, world_objects_list, is_delivery_mode=False, delivery_active_target=None): # Added delivery_active_target
         self.surface.fill(config.PASTEL_MINIMAP_BACKGROUND)
-        player_mini_x, player_mini_y = self.width // 2, self.height // 2 # Player is always center
-        pygame.draw.circle(self.surface, config.PASTEL_GOLD, (player_mini_x, player_mini_y), 5) # Player dot
+        player_mini_x, player_mini_y = self.width // 2, self.height // 2
+        pygame.draw.circle(self.surface, config.PASTEL_GOLD, (player_mini_x, player_mini_y), 5)
 
-        # Draw AI gliders (if any)
         for ai in ai_gliders_list:
             ai_mini_x, ai_mini_y = self.world_to_minimap(ai.world_x, ai.world_y, player_glider.world_x, player_glider.world_y)
-            if 0 <= ai_mini_x <= self.width and 0 <= ai_mini_y <= self.height: # Check if on minimap
-                 pygame.draw.circle(self.surface, ai.body_color, (ai_mini_x, ai_mini_y), 4) # AI dot
+            if 0 <= ai_mini_x <= self.width and 0 <= ai_mini_y <= self.height:
+                 pygame.draw.circle(self.surface, ai.body_color, (ai_mini_x, ai_mini_y), 4)
 
-        # Draw markers (Race) or Runways (Delivery)
-        for i, item_obj in enumerate(course_markers_or_runways):
+        # Draw world_objects_list (can be race markers, runways, or checkpoints)
+        for item_obj in world_objects_list:
             item_world_x = item_obj.world_pos.x
             item_world_y = item_obj.world_pos.y
             mini_x, mini_y = self.world_to_minimap(item_world_x, item_world_y, player_glider.world_x, player_glider.world_y)
 
             if 0 <= mini_x <= self.width and 0 <= mini_y <= self.height:
-                color_to_use = config.PASTEL_MARKER_COLOR
+                color_to_use = config.PASTEL_MARKER_COLOR # Default
                 label = ""
-                radius = config.RACE_MARKER_VISUAL_RADIUS_MAP
+                radius = config.RACE_MARKER_VISUAL_RADIUS_MAP # Default
 
-                if is_delivery_mode: # Delivery mode runways
-                    radius = config.DELIVERY_RUNWAY_VISUAL_RADIUS_WORLD // 5 # Smaller on minimap
+                if isinstance(item_obj, Runway):
+                    radius = config.DELIVERY_RUNWAY_VISUAL_RADIUS_WORLD // 6 # Smaller on minimap
                     if item_obj.is_destination:
                         color_to_use = config.PASTEL_RUNWAY_DESTINATION_COLOR
                         label = "D"
                     elif item_obj.is_start:
                         color_to_use = config.PASTEL_RUNWAY_START_COLOR
                         label = "S"
-                    else: # Should not happen if only start/dest are passed
-                        color_to_use = config.PASTEL_RUNWAY_COLOR
-                else: # Race mode markers
-                    if i == player_glider.current_target_marker_index:
+                elif isinstance(item_obj, RaceMarker):
+                    if item_obj.number -1 == player_glider.current_target_marker_index : # Race markers are 1-indexed by number
                         color_to_use = config.PASTEL_ACTIVE_MARKER_COLOR
                     label = str(item_obj.number)
-
+                elif isinstance(item_obj, DeliveryCheckpoint):
+                    radius = config.DELIVERY_CHECKPOINT_MINIMAP_RADIUS
+                    color_to_use = config.DELIVERY_CHECKPOINT_COLOR_ACTIVE if item_obj == delivery_active_target else config.DELIVERY_CHECKPOINT_COLOR_INACTIVE
+                    label = str(item_obj.number)
+                
                 pygame.draw.circle(self.surface, color_to_use, (mini_x, mini_y), radius)
                 if label:
-                    font_obj = get_cached_font(None, 14 if is_delivery_mode else 16)
+                    font_obj = get_cached_font(None, 12) # Smaller font for minimap labels
                     text_surf = font_obj.render(label, True, config.PASTEL_BLACK)
                     text_rect = text_surf.get_rect(center=(mini_x, mini_y))
                     self.surface.blit(text_surf, text_rect)
 
-        pygame.draw.rect(self.surface, config.PASTEL_MINIMAP_BORDER, self.surface.get_rect(), 2) # Border
+        pygame.draw.rect(self.surface, config.PASTEL_MINIMAP_BORDER, self.surface.get_rect(), 2)
         surface.blit(self.surface, self.rect)
 
 

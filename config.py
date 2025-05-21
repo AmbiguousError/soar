@@ -143,9 +143,25 @@ DELIVERY_RUNWAY_INTERACTION_RADIUS = 90 # For landing detection
 DELIVERY_LANDING_MAX_SPEED = 2.0       # Max speed for successful landing
 DELIVERY_LANDING_MAX_HEIGHT_ABOVE_GROUND = 50 # Max height above "runway level"
 DELIVERIES_TO_UNLOCK_WINGMAN = 1      # How many successful deliveries to unlock one wingman
-DELIVERY_START_HEIGHT_OFFSET = 50 # Start slightly above runway for takeoff (as per previous change)
+DELIVERY_START_HEIGHT_OFFSET = 50     # Start slightly above runway for takeoff
 DELIVERY_START_SPEED_FACTOR = 0.6     # Start at a fraction of initial speed
-DELIVERY_MIN_DISTANCE_INCREASE_FACTOR = 0.1 # Factor by which min distance increases per successful delivery (e.g., 0.1 = 10%)
+DELIVERY_MIN_DISTANCE_INCREASE_FACTOR = 0.1 # Factor by which min distance between START and END runways increases
+
+# --- Delivery Mode Checkpoints ---
+DELIVERY_CHECKPOINT_VISUAL_RADIUS_WORLD = 20
+DELIVERY_CHECKPOINT_INTERACTION_RADIUS = 60 
+DELIVERY_CHECKPOINT_COLOR_INACTIVE = (200, 200, 0, 150)  # Dim Yellow
+DELIVERY_CHECKPOINT_COLOR_ACTIVE = (255, 255, 0, 220)   # Bright Yellow
+DELIVERY_CHECKPOINTS_ADD_PER_N_LEVELS = 3 
+DELIVERY_MAX_CHECKPOINTS = 5 
+DELIVERY_CHECKPOINT_MINIMAP_RADIUS = 4
+DELIVERY_CHECKPOINT_OFFSET_RANGE = 300 # Max perpendicular offset for OLD checkpoint placement (can be repurposed or removed if new logic doesn't use it directly)
+
+# New constants for varied checkpoint paths and distances:
+DELIVERY_CHECKPOINT_BASE_LEG_DISTANCE = 800       # Base distance for each segment (start-CP1, CP1-CP2, etc.)
+DELIVERY_CHECKPOINT_LEG_DISTANCE_SCALE_PER_LEVEL = 75 # How much each leg distance increases per successful delivery
+DELIVERY_CHECKPOINT_MAX_ANGLE_DEVIATION = 40      # Max degrees to deviate from the direct path to the final destination for each checkpoint
+DELIVERY_CHECKPOINT_MIN_NEXT_LEG_DISTANCE_FACTOR = 0.5 # Ensure a leg isn't excessively short, as a factor of scaled_leg_dist
 
 # --- Wind ---
 MAX_WIND_STRENGTH = 1.0

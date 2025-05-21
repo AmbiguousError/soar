@@ -4,10 +4,11 @@ Pastel Glider is a 2D gliding simulation game built with Pygame. Players can exp
 
 ## Features
 
-* **Three Game Modes:**
+* **Four Game Modes:**
     * **Free Fly:** Explore an endless, procedurally generated world. Reach altitude goals to progress through levels and unlock AI wingmen who will fly in formation with you.
     * **Race Mode:** Compete against AI-controlled gliders on a course defined by markers. Race for the best lap times and total race times.
-    * **Dogfight Mode:** Engage in combat against waves of AI enemy gliders. Survive rounds of increasing difficulty by shooting down opponents. Manage your health and strategically engage foes.
+    *  **Dogfight Mode:** Engage in combat against waves of AI enemy gliders. Survive rounds of increasing difficulty by shooting down opponents. Manage your health and strategically engage foes.
++    * **Delivery Mode:** Take on the role of a cargo pilot. Start by taking off from a designated runway, fly to a destination runway, and perform a successful landing to complete the delivery.health and strategically engage foes.
 * **Physics-Based Flight:**
     * Control your glider's speed and bank angle.
     * Manage altitude by finding and using thermals for lift.

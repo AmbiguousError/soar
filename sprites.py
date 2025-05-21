@@ -202,11 +202,12 @@ class PlayerGlider(GliderBase):
         self.vertical_speed = 0.0
         self.current_lap_start_ticks = 0
         self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN
+        # self.current_delivery_destination_runway = None # REMOVE THIS LINE
 
     def reset(self, start_height=config.INITIAL_HEIGHT, start_x=0.0, start_y=0.0, start_speed=config.INITIAL_SPEED, start_heading=0):
         self.world_x = start_x
         self.world_y = start_y
-        self.rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2) # Player always drawn at screen center
+        self.rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2)
         self.heading = start_heading
         self.bank_angle = 0
         self.height = start_height
@@ -216,9 +217,9 @@ class PlayerGlider(GliderBase):
         self.trail_points = []
         self.contrail_frame_counter = 0
         self.current_target_marker_index = 0
-        self.current_delivery_destination_runway = None
+        # self.current_delivery_destination_runway = None # ENSURE THIS IS REMOVED/COMMENTED
         self.laps_completed = 0
-        self.health = self.max_health # Reset health
+        self.health = self.max_health 
         self.shoot_cooldown_timer = 0
         self.update_sprite_rotation_and_position()
 
@@ -672,3 +673,49 @@ class ForegroundCloud(pygame.sprite.Sprite):
             despawn = True
         if despawn:
             self.kill()
+
+# --- Delivery Checkpoint Class ---
+class DeliveryCheckpoint(pygame.sprite.Sprite):
+    def __init__(self, world_x, world_y, number):
+        super().__init__()
+        self.world_pos = pygame.math.Vector2(world_x, world_y)
+        self.number = number # Sequence number of the checkpoint
+        self.interaction_radius = config.DELIVERY_CHECKPOINT_INTERACTION_RADIUS
+        self.visual_radius = config.DELIVERY_CHECKPOINT_VISUAL_RADIUS_WORLD
+        self.is_active_target = False # Will be set by game_state_manager
+
+        # Create a base image surface larger than the visual radius to handle potential borders or effects
+        # For simplicity, the image will be redrawn in update if its state changes.
+        self.image = pygame.Surface((self.visual_radius * 2 + 4, self.visual_radius * 2 + 4), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=(self.world_pos.x, self.world_pos.y))
+        self._draw_image()
+
+    def _draw_image(self):
+        self.image.fill((0, 0, 0, 0)) # Clear surface
+        draw_pos = (self.image.get_width() // 2, self.image.get_height() // 2)
+        
+        color_to_use = config.DELIVERY_CHECKPOINT_COLOR_ACTIVE if self.is_active_target else config.DELIVERY_CHECKPOINT_COLOR_INACTIVE
+        
+        # Draw a diamond shape for the checkpoint
+        points = [
+            (draw_pos[0], draw_pos[1] - self.visual_radius),  # Top
+            (draw_pos[0] + self.visual_radius, draw_pos[1]),  # Right
+            (draw_pos[0], draw_pos[1] + self.visual_radius),  # Bottom
+            (draw_pos[0] - self.visual_radius, draw_pos[1]),  # Left
+        ]
+        pygame.draw.polygon(self.image, color_to_use, points)
+        
+        # Optional: Draw number inside if visual_radius is large enough
+        if self.number > 0: # Only draw number if it's meaningful
+            font_obj = pygame.font.Font(None, int(self.visual_radius * 1.2))
+            text_surf = font_obj.render(str(self.number), True, config.PASTEL_BLACK)
+            text_rect = text_surf.get_rect(center=draw_pos)
+            self.image.blit(text_surf, text_rect)
+
+    def update(self, cam_x, cam_y, is_currently_active_target):
+        if self.is_active_target != is_currently_active_target:
+            self.is_active_target = is_currently_active_target
+            self._draw_image() # Redraw if active state changes
+
+        self.rect.centerx = self.world_pos.x - cam_x
+        self.rect.centery = self.world_pos.y - cam_y
