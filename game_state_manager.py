@@ -1,11 +1,9 @@
-# game_state_manager.py
-# Manages game state, global variables, and core logic functions.
-
 import pygame
 import math
 import random
 import config
-from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud, Bullet, Runway, DeliveryCheckpoint
+# Ensure Explosion is imported from sprites
+from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud, Bullet, Runway, DeliveryCheckpoint, Explosion # Ensure Explosion is here
 from map_generation import regenerate_river_parameters, get_land_type_at_world_pos
 from ui import Minimap
 
@@ -397,19 +395,54 @@ def reset_to_main_menu():
     selected_laps_option = 1
     game_state = config.STATE_START_SCREEN
 
-def update_game_logic(keys):
-    global game_state, time_taken_for_level, final_score, current_thermal_spawn_rate, thermal_spawn_timer
-    global current_map_offset_x, current_map_offset_y, tile_type_cache
-    global race_course_markers, total_race_laps, level_timer_start_ticks
-    global high_scores, player_race_lap_times, current_session_flight_start_ticks, unlocked_wingmen_count
-    global dogfight_enemies_defeated_this_round, dogfight_current_round
-    global delivery_destination_runway, successful_deliveries_count, current_level, wingman_was_actually_unlocked_this_turn
-    global delivery_active_target_object, delivery_checkpoints_list, delivery_current_checkpoint_index
+# game_state_manager.py
+# ... (other imports and global variable definitions at the top of the file)
+# Ensure Explosion is imported from sprites:
+from sprites import PlayerGlider, AIGlider, Thermal, RaceMarker, ForegroundCloud, Bullet, Runway, DeliveryCheckpoint, Explosion # Ensure Explosion is here
 
+# ... (other functions like setup_delivery_mission, start_new_level, etc.)
+
+def update_game_logic(keys):
+    # Declare all global variables that are ASSIGNED TO or REBOUND within this function
+    global game_state, time_taken_for_level, final_score, current_thermal_spawn_rate, thermal_spawn_timer
+    global unlocked_wingmen_count, wingman_was_actually_unlocked_this_turn
+    global dogfight_enemies_defeated_this_round, dogfight_current_round
+    global successful_deliveries_count, current_level # CRITICAL: These were causing the error
+    global delivery_active_target_object, delivery_current_checkpoint_index
+    # Globals primarily read or mutated (like lists/dicts) don't strictly need `global` for this error,
+    # but it doesn't hurt to be explicit if you are also assigning to them.
+    # For this error, only assigned/rebound variables are essential here.
+    global player # To access player.is_exploding etc.
+
+    # --- Explosion Timer / Game State Transition ---
+    if player.is_exploding:
+        player.explosion_timer -= 1
+        if player.explosion_timer <= 0:
+            game_state = player.pending_game_over_state # This rebinds game_state
+            if player.pending_final_score_context is not None:
+                final_score = player.pending_final_score_context # This rebinds final_score
+            
+            if game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE:
+                 pass # final_score already set via pending_final_score_context
+            
+            if player.pending_game_over_state == config.STATE_GAME_OVER and \
+               config.current_game_mode == config.MODE_FREE_FLY and \
+               hasattr(player, '_crash_session_duration_for_hs'): 
+                if player._crash_session_duration_for_hs > high_scores["longest_flight_time_free_fly"]: # high_scores is a global dict, mutated
+                    high_scores["longest_flight_time_free_fly"] = player._crash_session_duration_for_hs
+                delattr(player, '_crash_session_duration_for_hs')
+
+            player.is_exploding = False 
+            player.pending_game_over_state = None
+            player.pending_final_score_context = None
+            if game_state == config.STATE_GAME_OVER or game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE:
+                 player.health = 0 
+    
+    # --- Player Update Call ---
     game_data_for_player = {
         "current_wind_speed_x": config.current_wind_speed_x,
         "current_wind_speed_y": config.current_wind_speed_y,
-        "game_state": game_state,
+        "game_state": game_state, 
         "race_course_markers": race_course_markers,
         "total_race_laps": total_race_laps,
         "level_timer_start_ticks": level_timer_start_ticks,
@@ -419,87 +452,93 @@ def update_game_logic(keys):
         "current_game_mode": config.current_game_mode,
         "time_taken_for_level": time_taken_for_level
     }
-    new_gs_from_player, ttf_update = player.update(keys, game_data_for_player, bullets_group, all_world_sprites)
-    if new_gs_from_player != game_state: game_state = new_gs_from_player
-    time_taken_for_level = ttf_update
+    returned_gs_from_player, ttf_update = player.update(keys, game_data_for_player, bullets_group, all_world_sprites)
+    if not player.is_exploding and returned_gs_from_player != game_state : 
+        game_state = returned_gs_from_player # game_state is rebound
+    time_taken_for_level = ttf_update # time_taken_for_level is rebound
+
+
     cam_x = player.world_x - config.SCREEN_WIDTH // 2
     cam_y = player.world_y - config.SCREEN_HEIGHT // 2
+
+    all_world_sprites.update(cam_x, cam_y) 
     bullets_group.update(cam_x, cam_y)
 
-    if game_state == config.STATE_RACE_PLAYING:
-        for ai in ai_gliders:
-            ai.update(cam_x, cam_y, race_course_markers, total_race_laps, game_state)
+    # --- Mode-specific logic ---
+    if game_state == config.STATE_RACE_PLAYING and not player.is_exploding:
+        for ai in ai_gliders: ai.update(cam_x, cam_y, race_course_markers, total_race_laps, game_state)
         collided_ais = pygame.sprite.spritecollide(player, ai_gliders, False, pygame.sprite.collide_circle)
         for ai_hit in collided_ais: player.apply_collision_effect(); ai_hit.apply_collision_effect()
         ai_list = list(ai_gliders); [(ai1.apply_collision_effect(),ai2.apply_collision_effect()) for i in range(len(ai_list)) for j in range(i+1,len(ai_list)) if(ai1:=ai_list[i],ai2:=ai_list[j],((ai1.world_x-ai2.world_x)**2+(ai1.world_y-ai2.world_y)**2)<(ai1.collision_radius+ai2.collision_radius)**2)]
-        for i, marker in enumerate(race_course_markers):
-            marker.update(cam_x, cam_y, i == player.current_target_marker_index)
+        for i, marker in enumerate(race_course_markers): marker.update(cam_x, cam_y, i == player.current_target_marker_index)
 
-    elif game_state == config.STATE_PLAYING_FREE_FLY or game_state == config.STATE_DELIVERY_PLAYING:
-        for wingman in wingmen_group:
-            wingman.update(cam_x, cam_y, player, 0, game_state)
-            
+
+    elif (game_state == config.STATE_PLAYING_FREE_FLY or game_state == config.STATE_DELIVERY_PLAYING) and not player.is_exploding:
+        for wingman in wingmen_group: wingman.update(cam_x, cam_y, player, 0, game_state)
         if game_state == config.STATE_DELIVERY_PLAYING:
-            for runway_sprite in delivery_runways_group: runway_sprite.update(cam_x, cam_y)
             for cp_sprite in delivery_checkpoints_group:
                 is_active = (delivery_active_target_object == cp_sprite)
                 cp_sprite.update(cam_x, cam_y, is_active)
-
-            wingman_was_actually_unlocked_this_turn = False
+            
+            wingman_was_actually_unlocked_this_turn = False # This is reassigned
             
             if delivery_active_target_object:
                 dist_to_target = math.hypot(player.world_x - delivery_active_target_object.world_pos.x,
                                             player.world_y - delivery_active_target_object.world_pos.y)
-
                 if isinstance(delivery_active_target_object, DeliveryCheckpoint):
                     if dist_to_target < delivery_active_target_object.interaction_radius:
-                        delivery_current_checkpoint_index += 1
+                        delivery_current_checkpoint_index += 1 # This is reassigned
                         _set_next_delivery_target()
-                
-                elif isinstance(delivery_active_target_object, Runway) and delivery_active_target_object.is_destination: # Check if it's specifically the destination runway
+                elif isinstance(delivery_active_target_object, Runway) and delivery_active_target_object.is_destination:
                     is_low_enough = player.height <= config.DELIVERY_LANDING_MAX_HEIGHT_ABOVE_GROUND
                     is_slow_enough = player.speed <= config.DELIVERY_LANDING_MAX_SPEED
                     if dist_to_target < delivery_active_target_object.interaction_radius and is_low_enough and is_slow_enough:
-                        successful_deliveries_count += 1
-                        current_level += 1
-                        if successful_deliveries_count > high_scores["max_deliveries_completed"]:
+                        successful_deliveries_count += 1 # REBOUND, NEEDS GLOBAL
+                        current_level +=1                # REBOUND, NEEDS GLOBAL
+                        if successful_deliveries_count > high_scores["max_deliveries_completed"]: 
                             high_scores["max_deliveries_completed"] = successful_deliveries_count
-
                         if config.DELIVERIES_TO_UNLOCK_WINGMAN > 0 and \
                            successful_deliveries_count % config.DELIVERIES_TO_UNLOCK_WINGMAN == 0 and \
                            unlocked_wingmen_count < config.MAX_WINGMEN:
-                            unlocked_wingmen_count += 1
-                            wingman_was_actually_unlocked_this_turn = True
-                        
-                        game_state = config.STATE_DELIVERY_COMPLETE
-                        time_taken_for_level = (pygame.time.get_ticks() - level_timer_start_ticks) / 1000.0
-    
-    elif game_state == config.STATE_DOGFIGHT_PLAYING:
-        for enemy in dogfight_enemies_group:
-            enemy.update(cam_x, cam_y, player, 0, game_state, bullets_group, all_world_sprites)
+                            unlocked_wingmen_count += 1      # REBOUND, NEEDS GLOBAL
+                            wingman_was_actually_unlocked_this_turn = True # REBOUND, NEEDS GLOBAL
+                        game_state = config.STATE_DELIVERY_COMPLETE # REBOUND, NEEDS GLOBAL
+                        time_taken_for_level = (pygame.time.get_ticks() - level_timer_start_ticks) / 1000.0 # REBOUND
+
+
+    elif game_state == config.STATE_DOGFIGHT_PLAYING and not player.is_exploding:
         for bullet in bullets_group:
             if bullet.owner == player:
                 enemies_hit = pygame.sprite.spritecollide(bullet, dogfight_enemies_group, False, pygame.sprite.collide_circle)
                 for enemy_hit in enemies_hit:
                     bullet.kill()
                     if enemy_hit.take_damage(config.BULLET_DAMAGE):
-                        dogfight_enemies_defeated_this_round += 1
-            else:
-                if pygame.sprite.collide_circle(bullet, player):
+                        explosion = Explosion(enemy_hit.world_pos)
+                        all_world_sprites.add(explosion)
+                        dogfight_enemies_defeated_this_round += 1 # REBOUND, NEEDS GLOBAL
+            else: 
+                if not player.is_exploding and pygame.sprite.collide_circle(bullet, player): 
                     bullet.kill()
                     if player.take_damage(config.BULLET_DAMAGE):
-                        game_state = config.STATE_DOGFIGHT_GAME_OVER_CONTINUE
-                        final_score = dogfight_current_round
-                        break
-        if game_state == config.STATE_DOGFIGHT_GAME_OVER_CONTINUE: pass
-        elif dogfight_enemies_defeated_this_round >= dogfight_enemies_to_spawn_this_round:
-            game_state = config.STATE_DOGFIGHT_ROUND_COMPLETE
-            time_taken_for_level = (pygame.time.get_ticks() - level_timer_start_ticks) / 1000.0
-
-    for thermal_sprite in thermals_group: thermal_sprite.update(cam_x, cam_y)
-    thermal_spawn_timer += 1
-    if thermal_spawn_timer >= current_thermal_spawn_rate:
-        thermal_spawn_timer = 0
+                        if not player.is_exploding: 
+                            explosion = Explosion((player.world_x, player.world_y))
+                            all_world_sprites.add(explosion)
+                            player.is_exploding = True
+                            player.explosion_timer = config.EXPLOSION_DURATION_TICKS
+                            player.pending_game_over_state = config.STATE_DOGFIGHT_GAME_OVER_CONTINUE
+                            player.pending_final_score_context = dogfight_current_round # dogfight_current_round is read
+                            player.speed = 0; player.height = max(0, player.height) 
+                        break 
+        
+        if not player.is_exploding: 
+            if dogfight_enemies_defeated_this_round >= dogfight_enemies_to_spawn_this_round:
+                game_state = config.STATE_DOGFIGHT_ROUND_COMPLETE # REBOUND
+                time_taken_for_level = (pygame.time.get_ticks() - level_timer_start_ticks) / 1000.0 # REBOUND
+    
+    # Common updates
+    thermal_spawn_timer += 1 # REBOUND
+    if thermal_spawn_timer >= current_thermal_spawn_rate: # current_thermal_spawn_rate is read
+        thermal_spawn_timer = 0 # REBOUND
         spawn_world_x = cam_x + random.randint(-config.THERMAL_SPAWN_AREA_WIDTH // 2, config.THERMAL_SPAWN_AREA_WIDTH // 2)
         spawn_world_y = cam_y + random.randint(-config.THERMAL_SPAWN_AREA_HEIGHT // 2, config.THERMAL_SPAWN_AREA_HEIGHT // 2)
         if random.random() < config.LAND_TYPE_THERMAL_PROBABILITY.get(get_land_type_at_world_pos(spawn_world_x, spawn_world_y, current_map_offset_x, current_map_offset_y, tile_type_cache), 0.0):
@@ -510,27 +549,40 @@ def update_game_logic(keys):
     if len(foreground_clouds_group) < config.NUM_FOREGROUND_CLOUDS:
         foreground_clouds_group.add(ForegroundCloud())
 
-    for thermal in thermals_group:
-        if math.hypot(player.world_x - thermal.world_pos.x, player.world_y - thermal.world_pos.y) < thermal.radius + (player.collision_radius * 0.5):
-            player.apply_lift_from_thermal(thermal.lift_power, config.game_difficulty)
+    if not player.is_exploding:
+        for thermal in thermals_group:
+            if math.hypot(player.world_x - thermal.world_pos.x, player.world_y - thermal.world_pos.y) < thermal.radius + (player.collision_radius * 0.5):
+                player.apply_lift_from_thermal(thermal.lift_power, config.game_difficulty)
 
-    if game_state == config.STATE_PLAYING_FREE_FLY and player.height >= config.TARGET_HEIGHT_PER_LEVEL * current_level:
-        game_state = config.STATE_TARGET_REACHED_OPTIONS
+    if game_state == config.STATE_PLAYING_FREE_FLY and not player.is_exploding and \
+       player.height >= config.TARGET_HEIGHT_PER_LEVEL * current_level: # current_level is read
+        game_state = config.STATE_TARGET_REACHED_OPTIONS # REBOUND
         level_end_ticks = pygame.time.get_ticks()
-        time_taken_for_level = (level_end_ticks - level_timer_start_ticks) / 1000.0
-        wingman_was_actually_unlocked_this_turn = False
-        if unlocked_wingmen_count < config.MAX_WINGMEN:
-            unlocked_wingmen_count += 1
-        spawn_wingmen()
+        time_taken_for_level = (level_end_ticks - level_timer_start_ticks) / 1000.0 # REBOUND
+        wingman_was_actually_unlocked_this_turn = False # REBOUND
+        if unlocked_wingmen_count < config.MAX_WINGMEN: # unlocked_wingmen_count is read
+            unlocked_wingmen_count += 1 # REBOUND
+        spawn_wingmen() 
 
-    if player.height <= 0 and game_state not in [config.STATE_DOGFIGHT_GAME_OVER_CONTINUE, config.STATE_DELIVERY_COMPLETE]:
-        if config.current_game_mode == config.MODE_DELIVERY and game_state != config.STATE_DELIVERY_COMPLETE:
-            final_score = successful_deliveries_count
+    if player.height <= 0 and not player.is_exploding and \
+       game_state not in [config.STATE_GAME_OVER, config.STATE_DOGFIGHT_GAME_OVER_CONTINUE, config.STATE_DELIVERY_COMPLETE]:
+        
+        explosion = Explosion((player.world_x, player.world_y))
+        all_world_sprites.add(explosion)
+        player.is_exploding = True
+        player.explosion_timer = config.EXPLOSION_DURATION_TICKS
+        player.pending_game_over_state = config.STATE_GAME_OVER
+        
+        if config.current_game_mode == config.MODE_DELIVERY:
+            player.pending_final_score_context = successful_deliveries_count # Read
         elif config.current_game_mode == config.MODE_FREE_FLY:
-            session_duration = (pygame.time.get_ticks() - current_session_flight_start_ticks) / 1000.0
-            if session_duration > high_scores["longest_flight_time_free_fly"]:
-                high_scores["longest_flight_time_free_fly"] = session_duration
-            final_score = player.height
-        player.height = 0
-        game_state = config.STATE_GAME_OVER
+            player.pending_final_score_context = current_level # Read
+            player._crash_session_duration_for_hs = (pygame.time.get_ticks() - current_session_flight_start_ticks) / 1000.0
+        else:
+            player.pending_final_score_context = 0 
+        
+        player.speed = 0
+        player.height = 0 
+
     return cam_x, cam_y
+

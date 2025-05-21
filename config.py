@@ -178,6 +178,8 @@ CLOUD_MAX_ALPHA = 100
 # --- Game Mechanics ---
 TARGET_HEIGHT_PER_LEVEL = 1000
 START_HEIGHT_NEW_LEVEL = 250
+EXPLOSION_DURATION_TICKS = 40 # Duration explosion stays visible (e.g., 10 frames * 4 ticks/frame for Explosion sprite)
+
 
 # --- Height Indicator ---
 INDICATOR_WIDTH = 20

@@ -1,6 +1,3 @@
-# sprites.py
-# Contains all Pygame sprite class definitions for the game.
-
 import pygame
 import math
 import random
@@ -48,7 +45,7 @@ class Bullet(pygame.sprite.Sprite):
 
 # --- Glider Base Class ---
 class GliderBase(pygame.sprite.Sprite):
-    def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0, max_health=100): # Added max_health
+    def __init__(self, body_color, wing_color, start_world_x=0.0, start_world_y=0.0, max_health=100):
         super().__init__()
         self.body_color = body_color
         self.wing_color = wing_color
@@ -96,30 +93,33 @@ class GliderBase(pygame.sprite.Sprite):
         self.collision_radius = config.GLIDER_COLLISION_RADIUS
         self.world_x = start_world_x
         self.world_y = start_world_y
+        self.world_pos = pygame.math.Vector2(start_world_x, start_world_y) 
         self.heading = 0
         self.bank_angle = 0
         self.height = config.INITIAL_HEIGHT
         self.speed = config.INITIAL_SPEED
         self.trail_points = []
         self.contrail_frame_counter = 0
-        self.current_target_marker_index = 0 # Used for Race
-        self.current_delivery_destination_runway = None # Used for Delivery
+        self.current_target_marker_index = 0 
         self.laps_completed = 0
 
-        # Combat attributes
         self.max_health = max_health
         self.health = self.max_health
         self.shoot_cooldown_timer = 0
-        self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN # Default, can be overridden by subclasses
+        self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN
 
     def update_sprite_rotation_and_position(self, cam_x=None, cam_y=None):
         self.image = pygame.transform.rotate(self.original_image, -self.heading)
+        self.world_pos.x = self.world_x
+        self.world_pos.y = self.world_y
+
         if isinstance(self, PlayerGlider):
             self.rect = self.image.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2))
         elif cam_x is not None and cam_y is not None:
             self.rect = self.image.get_rect(center=(self.world_x - cam_x, self.world_y - cam_y))
         else:
              self.rect = self.image.get_rect(center=(self.world_x, self.world_y))
+
 
     def update_contrail(self):
         heading_rad = math.radians(self.heading)
@@ -142,7 +142,7 @@ class GliderBase(pygame.sprite.Sprite):
                 if 0 <= screen_px <= config.SCREEN_WIDTH and 0 <= screen_py <= config.SCREEN_HEIGHT:
                     try:
                         pygame.draw.circle(surface, (*config.PASTEL_CONTRAIL_COLOR, alpha), (screen_px, screen_py), 2)
-                    except pygame.error:
+                    except pygame.error: 
                         pass
 
     def apply_collision_effect(self):
@@ -151,38 +151,39 @@ class GliderBase(pygame.sprite.Sprite):
         knockback_dist = 5
         self.world_x += knockback_dist * math.cos(knockback_angle)
         self.world_y += knockback_dist * math.sin(knockback_angle)
+        self.world_pos.x = self.world_x
+        self.world_pos.y = self.world_y
+
 
     def take_damage(self, amount):
         self.health -= amount
         if self.health <= 0:
             self.health = 0
-            self.kill() # Remove from all sprite groups if health is 0
-            return True # Indicates glider is destroyed
+            self.kill() 
+            return True 
         return False
 
     def shoot(self, bullets_group, all_sprites_group):
         if self.shoot_cooldown_timer <= 0:
             heading_rad = math.radians(self.heading)
-            # Bullet starts slightly in front of the glider's nose
-            bullet_start_x = self.world_x + (self.fuselage_length / 1.8) * math.cos(heading_rad) # Adjusted offset
+            bullet_start_x = self.world_x + (self.fuselage_length / 1.8) * math.cos(heading_rad) 
             bullet_start_y = self.world_y + (self.fuselage_length / 1.8) * math.sin(heading_rad)
 
             new_bullet = Bullet(bullet_start_x, bullet_start_y, self.heading, self)
             bullets_group.add(new_bullet)
             all_sprites_group.add(new_bullet)
             self.shoot_cooldown_timer = self.shoot_cooldown_duration
-            return True # Shot fired
-        return False # Cooldown active
+            return True 
+        return False 
 
     def draw_health_bar(self, surface, cam_x, cam_y):
-        if self.health > 0:
+        if self.health > 0 and self.max_health > 0 : 
             bar_x = self.world_x - cam_x - config.HEALTH_BAR_WIDTH // 2
-            bar_y = self.world_y - cam_y - self.rect.height // 2 - 10 # Above the glider
+            bar_y = (self.world_y - cam_y) - self.collision_radius - 15 
 
             health_ratio = self.health / self.max_health
             current_bar_width = int(config.HEALTH_BAR_WIDTH * health_ratio)
 
-            # Determine color based on health
             bar_color = config.HEALTH_BAR_COLOR_BAD
             if health_ratio > 0.66:
                 bar_color = config.HEALTH_BAR_COLOR_GOOD
@@ -202,12 +203,18 @@ class PlayerGlider(GliderBase):
         self.vertical_speed = 0.0
         self.current_lap_start_ticks = 0
         self.shoot_cooldown_duration = config.PLAYER_SHOOT_COOLDOWN
-        # self.current_delivery_destination_runway = None # REMOVE THIS LINE
+        
+        self.is_exploding = False
+        self.explosion_timer = 0
+        self.pending_game_over_state = None
+        self.pending_final_score_context = None
 
     def reset(self, start_height=config.INITIAL_HEIGHT, start_x=0.0, start_y=0.0, start_speed=config.INITIAL_SPEED, start_heading=0):
         self.world_x = start_x
         self.world_y = start_y
-        self.rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2)
+        self.world_pos.x = start_x 
+        self.world_pos.y = start_y
+        self.rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2) 
         self.heading = start_heading
         self.bank_angle = 0
         self.height = start_height
@@ -217,17 +224,42 @@ class PlayerGlider(GliderBase):
         self.trail_points = []
         self.contrail_frame_counter = 0
         self.current_target_marker_index = 0
-        # self.current_delivery_destination_runway = None # ENSURE THIS IS REMOVED/COMMENTED
         self.laps_completed = 0
         self.health = self.max_health 
         self.shoot_cooldown_timer = 0
+        
+        self.is_exploding = False 
+        self.explosion_timer = 0
+        self.pending_game_over_state = None
+        self.pending_final_score_context = None
+        
+        # Restore original image if it was changed during explosion
+        if hasattr(self, '_original_image_backup_explosion'):
+            self.original_image = self._original_image_backup_explosion
+            del self._original_image_backup_explosion
+        
         self.update_sprite_rotation_and_position()
 
-    def update(self, keys, game_data, bullets_group_ref, all_sprites_group_ref): # Added bullet groups
+
+    def update(self, keys, game_data, bullets_group_ref, all_sprites_group_ref):
+        if self.is_exploding:
+            if not hasattr(self, '_original_image_backup_explosion'): 
+                self._original_image_backup_explosion = self.original_image
+                temp_surf = pygame.Surface((1,1), pygame.SRCALPHA) 
+                self.original_image = temp_surf 
+                self.image = temp_surf
+                self.rect = self.image.get_rect(center=self.rect.center)
+            return game_data["game_state"], game_data["time_taken_for_level"] 
+
+        if hasattr(self, '_original_image_backup_explosion'): # Should be restored if no longer exploding
+            self.original_image = self._original_image_backup_explosion
+            del self._original_image_backup_explosion
+            # No need to call update_sprite_rotation_and_position() here, it's called at end of normal update
+
         current_wind_speed_x = game_data["current_wind_speed_x"]
         current_wind_speed_y = game_data["current_wind_speed_y"]
         game_state = game_data["game_state"]
-        race_course_markers = game_data.get("race_course_markers", []) # Use .get for safety
+        race_course_markers = game_data.get("race_course_markers", []) 
         total_race_laps = game_data.get("total_race_laps", 0)
         level_timer_start_ticks = game_data["level_timer_start_ticks"]
         game_difficulty = game_data["game_difficulty"]
@@ -240,10 +272,8 @@ class PlayerGlider(GliderBase):
         if game_data["current_game_mode"] == config.MODE_FREE_FLY and self.height > high_scores["max_altitude_free_fly"]:
             high_scores["max_altitude_free_fly"] = self.height
 
-        # Shooting input (only if in dogfight mode)
         if game_data["current_game_mode"] == config.MODE_DOGFIGHT and keys[pygame.K_SPACE]:
             self.shoot(bullets_group_ref, all_sprites_group_ref)
-
 
         if keys[pygame.K_UP]:
             self.speed += config.ACCELERATION
@@ -262,40 +292,36 @@ class PlayerGlider(GliderBase):
             self.bank_angle += config.BANK_RATE
         else:
             self.bank_angle *= 0.95
-        if abs(self.bank_angle) < 0.1:
-            self.bank_angle = 0
+        if abs(self.bank_angle) < 0.1: self.bank_angle = 0
         self.bank_angle = max(-config.MAX_BANK_ANGLE, min(self.bank_angle, config.MAX_BANK_ANGLE))
 
         actual_turn_rate_factor = config.BASE_PLAYER_BANK_TO_DEGREES_PER_FRAME
-        if game_difficulty == config.DIFFICULTY_NOOB:
-            actual_turn_rate_factor *= config.NOOB_TURN_FACTOR
-        elif game_difficulty == config.DIFFICULTY_EASY:
-            actual_turn_rate_factor *= config.EASY_TURN_FACTOR
-        else:
-            actual_turn_rate_factor *= config.NORMAL_TURN_FACTOR
+        if game_difficulty == config.DIFFICULTY_NOOB: actual_turn_rate_factor *= config.NOOB_TURN_FACTOR
+        elif game_difficulty == config.DIFFICULTY_EASY: actual_turn_rate_factor *= config.EASY_TURN_FACTOR
+        else: actual_turn_rate_factor *= config.NORMAL_TURN_FACTOR
         turn_rate_degrees = self.bank_angle * actual_turn_rate_factor
         self.heading = (self.heading + turn_rate_degrees) % 360
 
         heading_rad = math.radians(self.heading)
         self.world_x += self.speed * math.cos(heading_rad) + current_wind_speed_x
         self.world_y += self.speed * math.sin(heading_rad) + current_wind_speed_y
+        self.world_pos.x = self.world_x 
+        self.world_pos.y = self.world_y
 
         if self.speed < config.STALL_SPEED:
             height_change_due_to_physics = -config.GRAVITY_BASE_PULL - config.STALL_SINK_PENALTY
         else:
             lift_from_airspeed = self.speed * config.LIFT_PER_SPEED_UNIT
             net_vertical_force = lift_from_airspeed - config.GRAVITY_BASE_PULL
-            if net_vertical_force < 0:
-                height_change_due_to_physics = max(net_vertical_force, -config.MINIMUM_SINK_RATE)
-            else:
-                height_change_due_to_physics = net_vertical_force
+            if net_vertical_force < 0: height_change_due_to_physics = max(net_vertical_force, -config.MINIMUM_SINK_RATE)
+            else: height_change_due_to_physics = net_vertical_force
         self.height += height_change_due_to_physics
 
         if height_change_due_to_physics < 0:
             self.speed = min(self.speed + abs(height_change_due_to_physics) * config.DIVE_TO_SPEED_FACTOR, config.MAX_SPEED)
 
         self.vertical_speed = self.height - self.previous_height
-        self.update_sprite_rotation_and_position()
+        self.update_sprite_rotation_and_position() 
         self.update_contrail()
 
         new_game_state = game_state
@@ -319,11 +345,12 @@ class PlayerGlider(GliderBase):
                         if total_race_laps not in high_scores["best_total_race_times"] or \
                            time_taken_for_level_update < high_scores["best_total_race_times"][total_race_laps]:
                             high_scores["best_total_race_times"][total_race_laps] = time_taken_for_level_update
-
+                            
         return new_game_state, time_taken_for_level_update
 
 
     def apply_lift_from_thermal(self, thermal_lift_power_at_nominal_speed, game_difficulty_param):
+        if self.is_exploding: return # No lift if exploding
         if self.speed < config.STALL_SPEED: return
         actual_lift_power = thermal_lift_power_at_nominal_speed
         if game_difficulty_param == config.DIFFICULTY_EASY:
@@ -333,13 +360,13 @@ class PlayerGlider(GliderBase):
         self.height += max(actual_lift_power * (config.INITIAL_SPEED / max(self.speed, config.MIN_SPEED * 0.5)), actual_lift_power * 0.2)
 
 # --- AI Glider Class ---
-class AIGlider(GliderBase):
+class AIGlider(GliderBase): # THIS IS THE CLASS DEFINITION
     def __init__(self, start_world_x, start_world_y, body_color, wing_color, personality_profile=None, ai_mode="race", player_ref=None):
-        max_hp = config.AI_MAX_HEALTH if ai_mode != "wingman" else config.PLAYER_MAX_HEALTH # Wingmen could be tougher
+        max_hp = config.AI_MAX_HEALTH if ai_mode != "wingman" else config.PLAYER_MAX_HEALTH 
         super().__init__(body_color, wing_color, start_world_x, start_world_y, max_health=max_hp)
 
         self.ai_mode = ai_mode
-        self.player_ref = player_ref
+        self.player_ref = player_ref 
 
         self.personality = personality_profile if personality_profile else {}
         self.speed_factor = self.personality.get("speed_factor", 1.0)
@@ -354,17 +381,16 @@ class AIGlider(GliderBase):
         if self.ai_mode == "wingman" and self.player_ref:
             self.target_altitude = self.player_ref.height + self.altitude_preference_offset
         elif self.ai_mode == "dogfight_enemy" and self.player_ref:
-             self.target_altitude = self.player_ref.height # Try to match player altitude initially
+             self.target_altitude = self.player_ref.height 
 
         self.speed = random.uniform(self.base_min_speed, self.base_max_speed)
         self.height = self.target_altitude + random.uniform(-50, 50)
         self.base_target_speed = random.uniform(self.base_min_speed, self.base_max_speed)
         self.target_speed = self.base_target_speed
         self.speed_update_timer = random.randint(0, config.AI_TARGET_SPEED_UPDATE_INTERVAL // 2)
-        self.shoot_cooldown_duration = config.AI_SHOOT_COOLDOWN_BASE + random.randint(-10, 10) # Slight variation in RoF
+        self.shoot_cooldown_duration = config.AI_SHOOT_COOLDOWN_BASE + random.randint(-10, 10)
 
-        # Wingman specific
-        self.wingman_offset_angle = random.uniform(-math.pi / 6, math.pi / 6) # Tighter spread
+        self.wingman_offset_angle = random.uniform(-math.pi / 6, math.pi / 6) 
         self.wingman_follow_dist_x = config.WINGMAN_FOLLOW_DISTANCE_X + random.uniform(-15,15)
         self.wingman_follow_dist_y = config.WINGMAN_FOLLOW_DISTANCE_Y_BASE * (1 if random.random() < 0.5 else -1) + random.uniform(-20,20)
 
@@ -393,11 +419,10 @@ class AIGlider(GliderBase):
         self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE
 
     def update_wingman_behavior(self):
-        if not self.player_ref: return 0,0 # Should not happen if mode is wingman
+        if not self.player_ref: return 0,0 
 
         player_heading_rad = math.radians(self.player_ref.heading)
 
-        # Target position relative to player, rotated by player's heading
         target_x_local = self.wingman_follow_dist_x * math.cos(self.wingman_offset_angle) - self.wingman_follow_dist_y * math.sin(self.wingman_offset_angle)
         target_y_local = self.wingman_follow_dist_x * math.sin(self.wingman_offset_angle) + self.wingman_follow_dist_y * math.cos(self.wingman_offset_angle)
 
@@ -407,7 +432,7 @@ class AIGlider(GliderBase):
         dx = target_world_x - self.world_x
         dy = target_world_y - self.world_y
 
-        self.target_speed = self.player_ref.speed * self.speed_factor * 0.9 # Try to fly a bit slower than player
+        self.target_speed = self.player_ref.speed * self.speed_factor * 0.9 
         self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
 
         self.target_altitude = self.player_ref.height + self.altitude_preference_offset
@@ -422,35 +447,48 @@ class AIGlider(GliderBase):
         dy = self.player_ref.world_y - self.world_y
         dist_to_player = math.hypot(dx, dy)
 
-        # Basic: try to match player speed and altitude, with some variation
         self.target_speed = self.player_ref.speed * self.speed_factor + random.uniform(-1,1)
         self.target_speed = max(self.base_min_speed, min(self.target_speed, self.base_max_speed))
 
         self.target_altitude = self.player_ref.height + self.altitude_preference_offset
         alt_diff = self.target_altitude - self.height
-        self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE * 1.5 # More aggressive altitude change
+        self.height += alt_diff * config.AI_ALTITUDE_CORRECTION_RATE * 1.5
 
-        # Shooting logic
         if dist_to_player < config.DOGFIGHT_AI_SHOOTING_RANGE:
             angle_to_player_rad = math.atan2(dy, dx)
             angle_to_player_deg = math.degrees(angle_to_player_rad)
             heading_diff = (angle_to_player_deg - self.heading + 540) % 360 - 180
             if abs(heading_diff) < config.DOGFIGHT_AI_SHOOTING_CONE_ANGLE:
-                self.shoot(bullets_group_ref, all_sprites_group_ref)
+                self.shoot(bullets_group_ref, all_sprites_group_ref) 
         return dx, dy
 
+    def update(self, cam_x, cam_y, target_or_player_ref=None, total_laps_in_race=None, current_game_state=None, bullets_group_ref=None, all_sprites_group_ref=None):
+        current_args_are_sufficient_for_logic = False
+        if self.ai_mode == "race":
+            if target_or_player_ref is not None and total_laps_in_race is not None and current_game_state is not None:
+                current_args_are_sufficient_for_logic = True
+        elif self.ai_mode == "wingman":
+            if self.player_ref is not None and current_game_state is not None: # target_or_player_ref is player object, used via self.player_ref
+                 current_args_are_sufficient_for_logic = True
+        elif self.ai_mode == "dogfight_enemy":
+            if self.player_ref is not None and current_game_state is not None and bullets_group_ref is not None and all_sprites_group_ref is not None:
+                current_args_are_sufficient_for_logic = True
+        
+        if not current_args_are_sufficient_for_logic:
+            self.update_sprite_rotation_and_position(cam_x, cam_y)
+            self.update_contrail()
+            return
 
-    def update(self, cam_x, cam_y, target_or_player_ref, total_laps_in_race, current_game_state, bullets_group_ref=None, all_sprites_group_ref=None): # Added bullet groups
         if self.shoot_cooldown_timer > 0:
             self.shoot_cooldown_timer -=1
 
-        dx, dy = 0, 0 # Default delta for steering
-        angle_diff = 0 # Default angle difference
+        dx, dy = 0, 0 
+        angle_diff = 0 
 
         if self.ai_mode == "race":
             if not target_or_player_ref or current_game_state != config.STATE_RACE_PLAYING:
                 self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
-            race_markers_list = target_or_player_ref
+            race_markers_list = target_or_player_ref 
             target_marker = race_markers_list[self.current_target_marker_index]
             dx_marker = target_marker.world_pos.x - self.world_x
             dy_marker = target_marker.world_pos.y - self.world_y
@@ -463,15 +501,13 @@ class AIGlider(GliderBase):
                 self.current_target_marker_index += 1
                 if self.current_target_marker_index >= len(race_markers_list):
                     self.laps_completed += 1; self.current_target_marker_index = 0
-
         elif self.ai_mode == "wingman":
-            if not self.player_ref or current_game_state not in [config.STATE_PLAYING_FREE_FLY, config.STATE_DELIVERY_PLAYING]: # Wingmen in Free Fly & Delivery
+            if not self.player_ref or current_game_state not in [config.STATE_PLAYING_FREE_FLY, config.STATE_DELIVERY_PLAYING]: 
                 self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
             dx, dy = self.update_wingman_behavior()
-            target_angle_rad = math.atan2(dy, dx) # atan2 handles signs correctly
+            target_angle_rad = math.atan2(dy, dx) 
             target_angle_deg = math.degrees(target_angle_rad)
             angle_diff = (target_angle_deg - self.heading + 540) % 360 - 180
-
         elif self.ai_mode == "dogfight_enemy":
             if not self.player_ref or current_game_state != config.STATE_DOGFIGHT_PLAYING:
                 self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
@@ -482,10 +518,9 @@ class AIGlider(GliderBase):
         else:
             self.update_sprite_rotation_and_position(cam_x, cam_y); self.update_contrail(); return
 
-        # Common steering and movement
         turn_rate = self.base_turn_rate_scalar
         if self.ai_mode == "wingman":
-            turn_rate *= config.WINGMAN_CASUALNESS_FACTOR # Slower, more casual turning for wingmen
+            turn_rate *= config.WINGMAN_CASUALNESS_FACTOR 
 
         turn_this_frame = angle_diff * turn_rate
         self.heading = (self.heading + turn_this_frame) % 360
@@ -499,6 +534,8 @@ class AIGlider(GliderBase):
         heading_rad = math.radians(self.heading)
         self.world_x += self.speed * math.cos(heading_rad)
         self.world_y += self.speed * math.sin(heading_rad)
+        self.world_pos.x = self.world_x 
+        self.world_pos.y = self.world_y
 
         self.update_sprite_rotation_and_position(cam_x, cam_y)
         self.update_contrail()
@@ -513,7 +550,7 @@ class Thermal(pygame.sprite.Sprite):
 
         if game_difficulty_param == config.DIFFICULTY_NOOB:
             min_r, max_r, min_l, max_l = config.NOOB_MIN_THERMAL_RADIUS, config.NOOB_MAX_THERMAL_RADIUS, config.NOOB_MIN_THERMAL_LIFESPAN, config.NOOB_MAX_THERMAL_LIFESPAN
-        elif game_difficulty_param == config.DIFFICULTY_EASY:
+        elif game_difficulty_param == config.DIFFICULTY_EASY: 
             pass
 
         self.radius = random.randint(min_r, max_r)
@@ -552,29 +589,29 @@ class RaceMarker(pygame.sprite.Sprite):
         super().__init__()
         self.world_pos = pygame.math.Vector2(world_x, world_y)
         self.number = number
-        self.world_radius = config.RACE_MARKER_RADIUS_WORLD # Interaction radius
-        self.visual_radius = config.RACE_MARKER_VISUAL_RADIUS_WORLD # Drawing radius
+        self.world_radius = config.RACE_MARKER_RADIUS_WORLD
+        self.visual_radius = config.RACE_MARKER_VISUAL_RADIUS_WORLD
         self.image = pygame.Surface((self.visual_radius * 2, self.visual_radius * 2), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
-        self._draw_marker_image(False) # Initial draw
+        self._draw_marker_image(False) 
 
     def _draw_marker_image(self, is_active):
         color_to_use = config.PASTEL_ACTIVE_MARKER_COLOR if is_active else config.PASTEL_MARKER_COLOR
-        self.image.fill((0,0,0,0)) # Clear previous drawing
+        self.image.fill((0,0,0,0)) 
         pygame.draw.circle(self.image, color_to_use, (self.visual_radius, self.visual_radius), self.visual_radius)
         pygame.draw.circle(self.image, config.PASTEL_WHITE, (self.visual_radius, self.visual_radius), int(self.visual_radius * 0.7))
-
         font_obj = pygame.font.Font(None, int(self.visual_radius * 1.1))
         text_surf = font_obj.render(str(self.number), True, config.PASTEL_BLACK)
         text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
         self.image.blit(text_surf, text_rect)
 
-    def update(self, cam_x, cam_y, is_active):
+    def update(self, cam_x, cam_y, is_active=None): 
         self.rect.centerx = self.world_pos.x - cam_x
         self.rect.centery = self.world_pos.y - cam_y
-        self._draw_marker_image(is_active) # Redraw if active state changes or for dynamic effects
+        if is_active is not None: 
+            self._draw_marker_image(is_active)
 
-# --- Runway Class (New for Delivery Mode) ---
+# --- Runway Class ---
 class Runway(pygame.sprite.Sprite):
     def __init__(self, world_x, world_y, is_destination_runway=False, is_start_runway=False):
         super().__init__()
@@ -582,40 +619,121 @@ class Runway(pygame.sprite.Sprite):
         self.is_destination = is_destination_runway
         self.is_start = is_start_runway
         self.visual_radius = config.DELIVERY_RUNWAY_VISUAL_RADIUS_WORLD
-        self.interaction_radius = config.DELIVERY_RUNWAY_INTERACTION_RADIUS # For landing detection
+        self.interaction_radius = config.DELIVERY_RUNWAY_INTERACTION_RADIUS
 
-        # Simple visual: a rectangle. Could be more complex.
-        # Runway usually longer in one dimension. Let's make it a square for simplicity on map.
         self.image = pygame.Surface((self.visual_radius * 2, self.visual_radius * 2), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self._draw_runway_image()
 
     def _draw_runway_image(self):
-        self.image.fill((0,0,0,0)) # Clear previous drawing
+        self.image.fill((0,0,0,0)) 
         runway_color = config.PASTEL_RUNWAY_COLOR
         if self.is_destination:
             runway_color = config.PASTEL_RUNWAY_DESTINATION_COLOR
         elif self.is_start:
             runway_color = config.PASTEL_RUNWAY_START_COLOR
-
-        # Draw a simple filled circle for the runway marker on the map
         pygame.draw.circle(self.image, runway_color, (self.visual_radius, self.visual_radius), self.visual_radius)
-        
-        # Add a letter: 'S' for Start, 'D' for Destination
         letter = ""
         if self.is_start: letter = "S"
         elif self.is_destination: letter = "D"
-
         if letter:
-            font_obj = pygame.font.Font(None, int(self.visual_radius * 1.2)) # Slightly larger font
+            font_obj = pygame.font.Font(None, int(self.visual_radius * 1.2)) 
             text_surf = font_obj.render(letter, True, config.PASTEL_WHITE)
             text_rect = text_surf.get_rect(center=(self.visual_radius, self.visual_radius))
             self.image.blit(text_surf, text_rect)
 
-    def update(self, cam_x, cam_y):
+    def update(self, cam_x, cam_y): 
         self.rect.centerx = self.world_pos.x - cam_x
         self.rect.centery = self.world_pos.y - cam_y
-        # No need to redraw constantly unless its state changes, but _draw_runway_image is cheap.
+
+# --- Delivery Checkpoint Class ---
+class DeliveryCheckpoint(pygame.sprite.Sprite):
+    def __init__(self, world_x, world_y, number):
+        super().__init__()
+        self.world_pos = pygame.math.Vector2(world_x, world_y)
+        self.number = number 
+        self.interaction_radius = config.DELIVERY_CHECKPOINT_INTERACTION_RADIUS
+        self.visual_radius = config.DELIVERY_CHECKPOINT_VISUAL_RADIUS_WORLD
+        self.is_active_target = False 
+        self.image = pygame.Surface((self.visual_radius * 2 + 4, self.visual_radius * 2 + 4), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=(self.world_pos.x, self.world_pos.y))
+        self._draw_image()
+
+    def _draw_image(self):
+        self.image.fill((0, 0, 0, 0)) 
+        draw_pos = (self.image.get_width() // 2, self.image.get_height() // 2)
+        color_to_use = config.DELIVERY_CHECKPOINT_COLOR_ACTIVE if self.is_active_target else config.DELIVERY_CHECKPOINT_COLOR_INACTIVE
+        points = [
+            (draw_pos[0], draw_pos[1] - self.visual_radius),  
+            (draw_pos[0] + self.visual_radius, draw_pos[1]),  
+            (draw_pos[0], draw_pos[1] + self.visual_radius),  
+            (draw_pos[0] - self.visual_radius, draw_pos[1]),  
+        ]
+        pygame.draw.polygon(self.image, color_to_use, points)
+        if self.number > 0: 
+            font_obj = pygame.font.Font(None, int(self.visual_radius * 1.2))
+            text_surf = font_obj.render(str(self.number), True, config.PASTEL_BLACK)
+            text_rect = text_surf.get_rect(center=draw_pos)
+            self.image.blit(text_surf, text_rect)
+            
+    def update(self, cam_x, cam_y, is_currently_active_target=None): 
+        if is_currently_active_target is not None and self.is_active_target != is_currently_active_target:
+            self.is_active_target = is_currently_active_target
+            self._draw_image() 
+
+        self.rect.centerx = self.world_pos.x - cam_x
+        self.rect.centery = self.world_pos.y - cam_y
+
+# --- Explosion Class ---
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, center_world_pos):
+        super().__init__()
+        self.world_pos = pygame.math.Vector2(center_world_pos)
+        self.current_anim_frame_index = 0
+        self.ticks_per_anim_frame = 4  
+        self.anim_frame_tick_counter = 0
+        self.animation_sequence = [
+            (5, (255, 255, 100), 255),   
+            (15, (255, 200, 50), 255),   
+            (25, (255, 150, 0), 255),    
+            (35, (255, 100, 0), 240),    
+            (45, (200, 50, 0), 220),     
+            (40, (150, 50, 50), 200),    
+            (35, (100, 100, 100), 180),  
+            (30, (80, 80, 80), 150),     
+            (25, (60, 60, 60), 100),     
+            (20, (50, 50, 50), 50),      
+        ]
+        self.max_radius = 0
+        for frame_data in self.animation_sequence:
+            if frame_data[0] > self.max_radius:
+                self.max_radius = frame_data[0]
+        self.image = pygame.Surface((self.max_radius * 2, self.max_radius * 2), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=(self.world_pos.x, self.world_pos.y)) 
+        self._update_image()
+
+    def _update_image(self):
+        if self.current_anim_frame_index >= len(self.animation_sequence):
+            self.kill() 
+            return
+        radius, color, alpha = self.animation_sequence[self.current_anim_frame_index]
+        self.image.fill((0, 0, 0, 0)) 
+        center_of_surface = (self.image.get_width() // 2, self.image.get_height() // 2)
+        final_color = (*color, alpha)
+        pygame.draw.circle(self.image, final_color, center_of_surface, radius)
+
+    def update(self, cam_x, cam_y): 
+        self.anim_frame_tick_counter += 1
+        if self.anim_frame_tick_counter >= self.ticks_per_anim_frame:
+            self.anim_frame_tick_counter = 0
+            self.current_anim_frame_index += 1
+            if self.current_anim_frame_index < len(self.animation_sequence):
+                self._update_image()
+            else:
+                self.kill() 
+                return 
+        if self.alive(): 
+            self.rect.center = (self.world_pos.x - cam_x, self.world_pos.y - cam_y)
 
 # --- ForegroundCloud Class ---
 class ForegroundCloud(pygame.sprite.Sprite):
@@ -630,7 +748,7 @@ class ForegroundCloud(pygame.sprite.Sprite):
             pygame.draw.ellipse(self.image, (*config.PASTEL_CLOUD, random.randint(config.CLOUD_MIN_ALPHA, config.CLOUD_MAX_ALPHA)), (puff_x, puff_y, puff_w, puff_h))
 
         self.speed_factor = random.uniform(config.MIN_CLOUD_SPEED_FACTOR, config.MAX_CLOUD_SPEED_FACTOR)
-        self.dx = config.current_wind_speed_x * self.speed_factor
+        self.dx = config.current_wind_speed_x * self.speed_factor 
         self.dy = config.current_wind_speed_y * self.speed_factor
         self.x_float = 0.0
         self.y_float = 0.0
@@ -639,29 +757,29 @@ class ForegroundCloud(pygame.sprite.Sprite):
             self.x_float = (index / total_clouds) * config.SCREEN_WIDTH - self.width / 2 + random.uniform(-config.SCREEN_WIDTH / (total_clouds * 2), config.SCREEN_WIDTH / (total_clouds * 2))
             self.y_float = float(random.randint(-self.height // 2, config.SCREEN_HEIGHT - self.height // 2))
         else:
-            if self.dx == 0 and self.dy == 0: # Handle no wind case for respawn
+            if self.dx == 0 and self.dy == 0: 
                 side = random.choice(['left', 'right', 'top', 'bottom'])
                 if side == 'left': self.x_float, self.y_float = float(-self.width - 20), float(random.randint(-self.height, config.SCREEN_HEIGHT))
                 elif side == 'right': self.x_float, self.y_float = float(config.SCREEN_WIDTH + 20), float(random.randint(-self.height, config.SCREEN_HEIGHT))
                 elif side == 'top': self.x_float, self.y_float = float(random.randint(-self.width, config.SCREEN_WIDTH)), float(-self.height - 20)
                 else: self.x_float, self.y_float = float(random.randint(-self.width, config.SCREEN_WIDTH)), float(config.SCREEN_HEIGHT + 20)
-            else: # Wind determines spawn edge
-                if abs(self.dx) > abs(self.dy): # More horizontal wind
+            else: 
+                if abs(self.dx) > abs(self.dy): 
                     self.x_float = float(config.SCREEN_WIDTH + random.randint(0, 100) + self.width / 2 if self.dx < 0 else -random.randint(0, 100) - self.width / 2)
                     self.y_float = float(random.randint(-self.height // 2, config.SCREEN_HEIGHT - self.height // 2))
-                else: # More vertical wind
+                else: 
                     self.x_float = float(random.randint(-self.width // 2, config.SCREEN_WIDTH - self.width // 2))
                     self.y_float = float(config.SCREEN_HEIGHT + random.randint(0, 50) + self.height / 2 if self.dy < 0 else -random.randint(0, 50) - self.height / 2)
 
         self.rect = self.image.get_rect(topleft=(round(self.x_float), round(self.y_float)))
 
-    def update(self):
-        self.dx = config.current_wind_speed_x * self.speed_factor
+    def update(self): 
+        self.dx = config.current_wind_speed_x * self.speed_factor 
         self.dy = config.current_wind_speed_y * self.speed_factor
         self.x_float += self.dx
         self.y_float += self.dy
         self.rect.topleft = (round(self.x_float), round(self.y_float))
-        off_screen_margin_x = self.width * 1.5 + abs(self.dx * 20) # Dynamic margin based on speed
+        off_screen_margin_x = self.width * 1.5 + abs(self.dx * 20) 
         off_screen_margin_y = self.height * 1.5 + abs(self.dy * 20)
         despawn = False
         if (self.dx < 0 and self.rect.right < -off_screen_margin_x) or \
@@ -669,53 +787,7 @@ class ForegroundCloud(pygame.sprite.Sprite):
            (self.dy < 0 and self.rect.bottom < -off_screen_margin_y) or \
            (self.dy > 0 and self.rect.top > config.SCREEN_HEIGHT + off_screen_margin_y) or \
            (self.dx == 0 and self.dy == 0 and not (-off_screen_margin_x < self.rect.centerx < config.SCREEN_WIDTH + off_screen_margin_x and \
-                                               -off_screen_margin_y < self.rect.centery < config.SCREEN_HEIGHT + off_screen_margin_y)): # Stagnant cloud off screen
+                                               -off_screen_margin_y < self.rect.centery < config.SCREEN_HEIGHT + off_screen_margin_y)): 
             despawn = True
         if despawn:
             self.kill()
-
-# --- Delivery Checkpoint Class ---
-class DeliveryCheckpoint(pygame.sprite.Sprite):
-    def __init__(self, world_x, world_y, number):
-        super().__init__()
-        self.world_pos = pygame.math.Vector2(world_x, world_y)
-        self.number = number # Sequence number of the checkpoint
-        self.interaction_radius = config.DELIVERY_CHECKPOINT_INTERACTION_RADIUS
-        self.visual_radius = config.DELIVERY_CHECKPOINT_VISUAL_RADIUS_WORLD
-        self.is_active_target = False # Will be set by game_state_manager
-
-        # Create a base image surface larger than the visual radius to handle potential borders or effects
-        # For simplicity, the image will be redrawn in update if its state changes.
-        self.image = pygame.Surface((self.visual_radius * 2 + 4, self.visual_radius * 2 + 4), pygame.SRCALPHA)
-        self.rect = self.image.get_rect(center=(self.world_pos.x, self.world_pos.y))
-        self._draw_image()
-
-    def _draw_image(self):
-        self.image.fill((0, 0, 0, 0)) # Clear surface
-        draw_pos = (self.image.get_width() // 2, self.image.get_height() // 2)
-        
-        color_to_use = config.DELIVERY_CHECKPOINT_COLOR_ACTIVE if self.is_active_target else config.DELIVERY_CHECKPOINT_COLOR_INACTIVE
-        
-        # Draw a diamond shape for the checkpoint
-        points = [
-            (draw_pos[0], draw_pos[1] - self.visual_radius),  # Top
-            (draw_pos[0] + self.visual_radius, draw_pos[1]),  # Right
-            (draw_pos[0], draw_pos[1] + self.visual_radius),  # Bottom
-            (draw_pos[0] - self.visual_radius, draw_pos[1]),  # Left
-        ]
-        pygame.draw.polygon(self.image, color_to_use, points)
-        
-        # Optional: Draw number inside if visual_radius is large enough
-        if self.number > 0: # Only draw number if it's meaningful
-            font_obj = pygame.font.Font(None, int(self.visual_radius * 1.2))
-            text_surf = font_obj.render(str(self.number), True, config.PASTEL_BLACK)
-            text_rect = text_surf.get_rect(center=draw_pos)
-            self.image.blit(text_surf, text_rect)
-
-    def update(self, cam_x, cam_y, is_currently_active_target):
-        if self.is_active_target != is_currently_active_target:
-            self.is_active_target = is_currently_active_target
-            self._draw_image() # Redraw if active state changes
-
-        self.rect.centerx = self.world_pos.x - cam_x
-        self.rect.centery = self.world_pos.y - cam_y
