@@ -141,9 +141,9 @@ RACE_COURSE_AREA_HALFWIDTH = 2500 # Also used for Delivery mode map area
 DELIVERY_RUNWAY_VISUAL_RADIUS_WORLD = 40 # Visual size on map
 DELIVERY_RUNWAY_INTERACTION_RADIUS = 90 # For landing detection
 DELIVERY_LANDING_MAX_SPEED = 2.0       # Max speed for successful landing
-DELIVERY_LANDING_MAX_HEIGHT_ABOVE_GROUND = 10 # Max height above "runway level"
+DELIVERY_LANDING_MAX_HEIGHT_ABOVE_GROUND = 50 # Max height above "runway level"
 DELIVERIES_TO_UNLOCK_WINGMAN = 1      # How many successful deliveries to unlock one wingman
-DELIVERY_START_HEIGHT_OFFSET = 15     # Start slightly above runway for takeoff
+DELIVERY_START_HEIGHT_OFFSET = 50     # Start slightly above runway for takeoff
 DELIVERY_START_SPEED_FACTOR = 0.6     # Start at a fraction of initial speed
 
 # --- Wind ---

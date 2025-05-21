@@ -103,8 +103,8 @@ def draw_height_indicator_hud(surface, current_player_height, target_h_for_level
     pygame.draw.rect(surface, config.PASTEL_INDICATOR_COLOR, (indicator_x_pos, indicator_y_pos, config.INDICATOR_WIDTH, indicator_bar_height))
 
     max_indicator_height_value = target_h_for_level * 1.15 if current_game_mode_param == config.MODE_FREE_FLY else current_player_height + 500
-    if current_game_mode_param == config.MODE_DELIVERY: # For delivery, scale might need to be dynamic or fixed high
-        max_indicator_height_value = max(current_player_height + 500, 1000) # Ensure reasonable scale
+    if current_game_mode_param == config.MODE_DELIVERY: 
+        max_indicator_height_value = max(current_player_height + 500, 1000) 
 
     max_indicator_height_value = max(1, max_indicator_height_value)
 
@@ -152,13 +152,13 @@ def draw_dial(surface, center_x, center_y, radius, hand_angle_degrees, hand_colo
     pygame.draw.circle(surface, border_color, (center_x, center_y), radius, 1)
     draw_text(surface, label, config.HUD_FONT_SIZE_SMALL - 6 , center_x, center_y - radius + 7, border_color, font_name=config.HUD_FONT_NAME, center=True)
 
-    hand_angle_rad = math.radians(hand_angle_degrees - 90) # Offset by -90 because 0 degrees is right in math, but up in compass
+    hand_angle_rad = math.radians(hand_angle_degrees - 90) 
     hand_end_x = center_x + (radius * 0.8) * math.cos(hand_angle_rad)
     hand_end_y = center_y + (radius * 0.8) * math.sin(hand_angle_rad)
     pygame.draw.line(surface, hand_color, (center_x, center_y), (hand_end_x, hand_end_y), 2)
 
 def draw_weather_vane(surface, wind_x, wind_y, center_x, center_y, radius=22, max_strength_for_scaling=config.MAX_WIND_STRENGTH):
-    vane_angle_rad = math.atan2(wind_y, wind_x) + math.pi # Points into the wind
+    vane_angle_rad = math.atan2(wind_y, wind_x) + math.pi 
     wind_magnitude = math.hypot(wind_x, wind_y)
     arrow_color = config.PASTEL_TEXT_COLOR_HUD
     arrow_thickness = 2
@@ -244,11 +244,11 @@ def draw_mode_select_screen(surface, selected_option_idx):
         ("Free Fly", "(Explore & Reach Altitude Goals)", config.MODE_FREE_FLY),
         ("Race", "(Fly Through Markers Against AI)", config.MODE_RACE),
         ("Dogfight", "(Survive Enemy Waves!)", config.MODE_DOGFIGHT),
-        ("Delivery", "(Transport Goods Between Runways)", config.MODE_DELIVERY) # Added Delivery
+        ("Delivery", "(Transport Goods Between Runways)", config.MODE_DELIVERY) 
     ]
 
-    option_base_y = config.SCREEN_HEIGHT // 2 - (len(modes_display) // 2 * 70) # Center options
-    if len(modes_display) % 2 == 0: option_base_y -= 35 # Adjust if even number of options
+    option_base_y = config.SCREEN_HEIGHT // 2 - (len(modes_display) // 2 * 70) 
+    if len(modes_display) % 2 == 0: option_base_y -= 35 
 
     for i, (name, desc, mode_const) in enumerate(modes_display):
         color = config.PASTEL_WHITE if selected_option_idx == mode_const else config.PASTEL_GRAY
@@ -307,10 +307,6 @@ def draw_race_post_options_screen(surface, total_time_seconds, lap_times_list):
     y_offset += 40
     draw_text(surface, "Q: Main Menu", 30, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-# This function seems redundant if draw_race_post_options_screen is used for the actual post-race options.
-# draw_race_complete_screen might be intended for a brief display before options.
-# For now, I'll assume draw_race_post_options_screen is the primary one.
-
 def draw_dogfight_round_complete_screen(surface, round_num, time_taken):
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, f"Round {round_num} Complete!", 60, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True)
@@ -325,14 +321,31 @@ def draw_dogfight_game_over_continue_screen(surface, round_reached):
     draw_text(surface, "Press C to Continue (Retry Round)", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
-def draw_delivery_complete_screen(surface, delivery_num, time_taken, wingman_unlocked_this_time):
+def draw_delivery_complete_screen(surface, delivery_num, time_taken, wingman_newly_acquired_this_delivery, current_total_unlocked_wingmen):
     surface.fill(config.PASTEL_DARK_GRAY)
     draw_text(surface, f"Delivery #{delivery_num} Complete!", 56, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 3, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True, shadow=True)
     draw_text(surface, f"Time: {time_taken:.1f}s", 34, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 - 30, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True)
-    if wingman_unlocked_this_time:
-        draw_text(surface, "New Wingman Unlocked!", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 10, config.PASTEL_GREEN_TARGET, font_name=config.HUD_FONT_NAME, center=True)
+    
+    y_pos_message = config.SCREEN_HEIGHT // 2 + 10
+
+    if wingman_newly_acquired_this_delivery:
+        draw_text(surface, "New Wingman Unlocked!", 30, config.SCREEN_WIDTH // 2, y_pos_message, config.PASTEL_GREEN_TARGET, font_name=config.HUD_FONT_NAME, center=True)
     else:
-        draw_text(surface, f"{config.DELIVERIES_TO_UNLOCK_WINGMAN - (delivery_num % config.DELIVERIES_TO_UNLOCK_WINGMAN) if config.DELIVERIES_TO_UNLOCK_WINGMAN > 0 and (delivery_num % config.DELIVERIES_TO_UNLOCK_WINGMAN !=0) else config.DELIVERIES_TO_UNLOCK_WINGMAN} more for next wingman.", 22, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 10, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+        is_milestone_delivery = (config.DELIVERIES_TO_UNLOCK_WINGMAN > 0 and
+                                 delivery_num > 0 and
+                                 delivery_num % config.DELIVERIES_TO_UNLOCK_WINGMAN == 0)
+
+        if is_milestone_delivery and current_total_unlocked_wingmen >= config.MAX_WINGMEN:
+            draw_text(surface, "Max Wingmen Unlocked!", 30, config.SCREEN_WIDTH // 2, y_pos_message, config.PASTEL_GOLD, font_name=config.HUD_FONT_NAME, center=True)
+        elif current_total_unlocked_wingmen < config.MAX_WINGMEN and config.DELIVERIES_TO_UNLOCK_WINGMAN > 0:
+            deliveries_made_in_current_cycle = delivery_num % config.DELIVERIES_TO_UNLOCK_WINGMAN
+            remaining_for_next = config.DELIVERIES_TO_UNLOCK_WINGMAN - deliveries_made_in_current_cycle
+            if deliveries_made_in_current_cycle == 0 and delivery_num > 0 : # handles case if current_delivery_num is a multiple e.g. 2/2, 4/2
+                 remaining_for_next = config.DELIVERIES_TO_UNLOCK_WINGMAN
+            
+            draw_text(surface, f"{remaining_for_next} more for next wingman.", 22, config.SCREEN_WIDTH // 2, y_pos_message, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
+        elif current_total_unlocked_wingmen >= config.MAX_WINGMEN:
+            draw_text(surface, "All available wingmen unlocked.", 22, config.SCREEN_WIDTH // 2, y_pos_message, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
 
     draw_text(surface, "Press N for Next Delivery", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 60, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
     draw_text(surface, "Press Q for Main Menu", 30, config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 100, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)
@@ -357,11 +370,9 @@ def draw_game_over_screen_content(surface, final_player_height_or_score, level_o
         draw_text(surface, "Crashed or quit race.", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += line_height
     elif current_game_mode_data == config.MODE_DOGFIGHT:
         draw_text(surface, f"Survived to Round: {dogfight_round_reached}", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += line_height
-        # Could add high score for dogfight rounds later
     elif current_game_mode_data == config.MODE_DELIVERY:
         draw_text(surface, f"Deliveries Completed: {deliveries_completed}", config.HUD_FONT_SIZE_LARGE, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += line_height
         draw_text(surface, f"Max Deliveries This Session: {high_scores_data['max_deliveries_completed']}", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += line_height
         draw_text(surface, "Mission Failed or Quit.", config.HUD_FONT_SIZE_NORMAL, config.SCREEN_WIDTH // 2, y_offset, config.PASTEL_WHITE, font_name=config.HUD_FONT_NAME, center=True); y_offset += line_height
-
 
     draw_text(surface, "Press ENTER for Menu", 32, config.SCREEN_WIDTH // 2, y_offset + 40, config.PASTEL_LIGHT_GRAY, font_name=config.HUD_FONT_NAME, center=True)

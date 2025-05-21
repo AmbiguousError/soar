@@ -28,6 +28,7 @@ current_thermal_spawn_rate = config.BASE_THERMAL_SPAWN_RATE
 thermal_spawn_timer = 0
 final_score = 0
 unlocked_wingmen_count = 0 # Unlocked across modes
+wingman_was_actually_unlocked_this_turn = False # New flag
 
 selected_difficulty_option = config.DIFFICULTY_NORMAL
 config.game_difficulty = selected_difficulty_option
@@ -103,7 +104,7 @@ def find_suitable_runway_location(existing_locations, map_offset_x, map_offset_y
 def setup_delivery_mission():
     global delivery_start_runway, delivery_destination_runway, delivery_runways_group, all_world_sprites
     global player, game_state, current_map_offset_x, current_map_offset_y, tile_type_cache
-    global level_timer_start_ticks # Make sure this is global if modified
+    global level_timer_start_ticks, wingman_was_actually_unlocked_this_turn # Make sure this is global if modified
 
     # Clear previous runways
     for runway_sprite in delivery_runways_group:
@@ -111,6 +112,7 @@ def setup_delivery_mission():
     delivery_runways_group.empty()
     delivery_start_runway = None
     delivery_destination_runway = None
+    wingman_was_actually_unlocked_this_turn = False # Reset for new mission
 
     # Find start runway location
     start_loc = find_suitable_runway_location([], current_map_offset_x, current_map_offset_y, tile_type_cache)
@@ -221,9 +223,10 @@ def start_new_level(level_param, continue_map_from_race=False):
     global current_level, level_timer_start_ticks, current_thermal_spawn_rate, thermal_spawn_timer, game_state
     global current_map_offset_x, current_map_offset_y, total_race_laps, ai_gliders, tile_type_cache
     global player_race_lap_times, current_session_flight_start_ticks, race_course_markers, dogfight_current_round
-    global delivery_runways_group, delivery_start_runway, delivery_destination_runway # Removed successful_deliveries_count, it's reset in main menu
+    global delivery_runways_group, delivery_start_runway, delivery_destination_runway, wingman_was_actually_unlocked_this_turn
 
     level_timer_start_ticks = pygame.time.get_ticks()
+    wingman_was_actually_unlocked_this_turn = False # Reset for new level/mode start
 
     if not continue_map_from_race: # New map unless specified
         current_map_offset_x = random.randint(-200000, 200000)
@@ -303,6 +306,7 @@ def reset_to_main_menu():
     global player_race_lap_times, race_course_markers, unlocked_wingmen_count
     global dogfight_current_round, dogfight_enemies_defeated_this_round, dogfight_enemies_to_spawn_this_round
     global delivery_start_runway, delivery_destination_runway, delivery_runways_group, successful_deliveries_count
+    global wingman_was_actually_unlocked_this_turn
 
     player.reset() # Generic reset
     thermals_group.empty()
@@ -325,6 +329,8 @@ def reset_to_main_menu():
     dogfight_enemies_to_spawn_this_round = 0
     delivery_start_runway = None
     delivery_destination_runway = None
+    wingman_was_actually_unlocked_this_turn = False
+
 
     config.current_wind_speed_x = -0.2
     config.current_wind_speed_y = 0.05
@@ -346,7 +352,7 @@ def update_game_logic(keys):
     global race_course_markers, total_race_laps, level_timer_start_ticks
     global high_scores, player_race_lap_times, current_session_flight_start_ticks, unlocked_wingmen_count
     global dogfight_enemies_defeated_this_round, dogfight_current_round
-    global delivery_destination_runway, successful_deliveries_count, current_level # Added current_level as global
+    global delivery_destination_runway, successful_deliveries_count, current_level, wingman_was_actually_unlocked_this_turn
 
     game_data_for_player = {
         "current_wind_speed_x": config.current_wind_speed_x,
@@ -388,6 +394,8 @@ def update_game_logic(keys):
         if game_state == config.STATE_DELIVERY_PLAYING:
             for runway_sprite in delivery_runways_group: # Update runway positions
                 runway_sprite.update(cam_x, cam_y)
+            
+            wingman_was_actually_unlocked_this_turn = False # Reset before check
             # Landing Check for Delivery
             if delivery_destination_runway:
                 dist_to_dest = math.hypot(player.world_x - delivery_destination_runway.world_pos.x,
@@ -402,9 +410,11 @@ def update_game_logic(keys):
                         high_scores["max_deliveries_completed"] = successful_deliveries_count
 
                     # Unlock wingman
-                    if successful_deliveries_count % config.DELIVERIES_TO_UNLOCK_WINGMAN == 0 and \
+                    if config.DELIVERIES_TO_UNLOCK_WINGMAN > 0 and \
+                       successful_deliveries_count % config.DELIVERIES_TO_UNLOCK_WINGMAN == 0 and \
                        unlocked_wingmen_count < config.MAX_WINGMEN:
                         unlocked_wingmen_count += 1
+                        wingman_was_actually_unlocked_this_turn = True # Set flag
                     # spawn_wingmen() # Spawn immediately or wait for next mission setup? Let's do it on next setup.
 
                     game_state = config.STATE_DELIVERY_COMPLETE
@@ -462,8 +472,11 @@ def update_game_logic(keys):
         game_state = config.STATE_TARGET_REACHED_OPTIONS
         level_end_ticks = pygame.time.get_ticks()
         time_taken_for_level = (level_end_ticks - level_timer_start_ticks) / 1000.0
+        
+        wingman_was_actually_unlocked_this_turn = False # Reset for Free Fly unlock
         if unlocked_wingmen_count < config.MAX_WINGMEN: # Free fly also unlocks wingmen
             unlocked_wingmen_count += 1
+            wingman_was_actually_unlocked_this_turn = True # Though not directly used on this screen in UI
         spawn_wingmen() # Update wingmen based on new count
 
     # Player crash / Game Over condition (if not already handled by a specific mode's fail state)
