@@ -143,8 +143,9 @@ DELIVERY_RUNWAY_INTERACTION_RADIUS = 90 # For landing detection
 DELIVERY_LANDING_MAX_SPEED = 2.0       # Max speed for successful landing
 DELIVERY_LANDING_MAX_HEIGHT_ABOVE_GROUND = 50 # Max height above "runway level"
 DELIVERIES_TO_UNLOCK_WINGMAN = 1      # How many successful deliveries to unlock one wingman
-DELIVERY_START_HEIGHT_OFFSET = 50     # Start slightly above runway for takeoff
+DELIVERY_START_HEIGHT_OFFSET = 50 # Start slightly above runway for takeoff (as per previous change)
 DELIVERY_START_SPEED_FACTOR = 0.6     # Start at a fraction of initial speed
+DELIVERY_MIN_DISTANCE_INCREASE_FACTOR = 0.1 # Factor by which min distance increases per successful delivery (e.g., 0.1 = 10%)
 
 # --- Wind ---
 MAX_WIND_STRENGTH = 1.0
