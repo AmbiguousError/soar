@@ -145,15 +145,19 @@ function update() {
 }
 
 function updateFreeFly() {
-    gameStateManager.player.update(keys, {});
+    gameStateManager.player.update(keys, []);
+
     // Update thermals
     gameStateManager.thermalSpawnTimer++;
     if (gameStateManager.thermalSpawnTimer >= gameStateManager.currentThermalSpawnRate) {
         gameStateManager.thermalSpawnTimer = 0;
         const camX = gameStateManager.player.worldX - canvas.width / 2;
         const camY = gameStateManager.player.worldY - canvas.height / 2;
+        // Spawn thermals in a wide area around the camera view
         const spawnWorldX = camX + Math.random() * config.THERMAL_SPAWN_AREA_WIDTH - config.THERMAL_SPAWN_AREA_WIDTH / 2;
         const spawnWorldY = camY + Math.random() * config.THERMAL_SPAWN_AREA_HEIGHT - config.THERMAL_SPAWN_AREA_HEIGHT / 2;
+
+        // Spawn thermals based on the underlying land type
         const landType = getLandTypeAtWorldPos(spawnWorldX, spawnWorldY, gameStateManager.currentMapOffsetX, gameStateManager.currentMapOffsetY, gameStateManager.tileTypeCache);
         if (Math.random() < config.LAND_TYPE_THERMAL_PROBABILITY[landType]) {
             gameStateManager.thermals.push(new Thermal(config, spawnWorldX, spawnWorldY));
@@ -178,7 +182,7 @@ function updateFreeFly() {
 }
 
 function updateRace() {
-    gameStateManager.player.update(keys, {});
+    gameStateManager.player.update(keys, gameStateManager.raceCourseMarkers);
     for (const ai of gameStateManager.aiGliders) {
         ai.update(gameStateManager.raceCourseMarkers);
     }

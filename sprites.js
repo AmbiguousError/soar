@@ -19,16 +19,17 @@ class Player {
         this.currentTargetMarkerIndex = 0;
     }
 
-    update(keys, gameData) {
+    update(keys, raceMarkers) {
         this.previousHeight = this.height;
 
-        // Update speed
-        if (keys.ArrowUp) {
+        // Update speed based on nose pitch (controlled by up/down arrows)
+        if (keys.ArrowUp) { // Pointing nose down to gain speed
             this.speed += this.config.ACCELERATION;
-        } else if (keys.ArrowDown) {
+        } else if (keys.ArrowDown) { // Pointing nose up to trade speed for height
             const potentialNewSpeed = this.speed - this.config.ACCELERATION;
             if (potentialNewSpeed >= this.config.MIN_SPEED) {
                 this.speed = potentialNewSpeed;
+                // "Zoom climb" - convert kinetic energy to potential energy
                 this.height += this.config.ACCELERATION * this.config.ZOOM_CLIMB_FACTOR;
             } else {
                 this.speed = this.config.MIN_SPEED;
@@ -36,57 +37,114 @@ class Player {
         }
         this.speed = Math.max(this.config.MIN_SPEED, Math.min(this.speed, this.config.MAX_SPEED));
 
-        // Update bank angle and heading
+        // --- Handle turning ---
         if (keys.ArrowLeft) {
             this.bankAngle -= this.config.BANK_RATE;
         } else if (keys.ArrowRight) {
             this.bankAngle += this.config.BANK_RATE;
         } else {
+            // Gradually return to level flight if no input
             this.bankAngle *= 0.95;
         }
-        if (Math.abs(this.bankAngle) < 0.1) {
-            this.bankAngle = 0;
-        }
+        if (Math.abs(this.bankAngle) < 0.1) this.bankAngle = 0; // Snap to zero
         this.bankAngle = Math.max(-this.config.MAX_BANK_ANGLE, Math.min(this.bankAngle, this.config.MAX_BANK_ANGLE));
 
+        // Calculate turn rate based on bank angle
         const turnRateDegrees = this.bankAngle * this.config.BASE_PLAYER_BANK_TO_DEGREES_PER_FRAME;
         this.heading = (this.heading + turnRateDegrees) % 360;
 
-        // Update world position
+        // --- Update position ---
         const headingRad = this.heading * Math.PI / 180;
         this.worldX += this.speed * Math.cos(headingRad);
         this.worldY += this.speed * Math.sin(headingRad);
 
-        // Update height
+        // --- Handle altitude changes (Lift, Gravity, Stall) ---
         let heightChangeDueToPhysics;
         if (this.speed < this.config.STALL_SPEED) {
+            // Stalled: Significant loss of altitude
             heightChangeDueToPhysics = -this.config.GRAVITY_BASE_PULL - this.config.STALL_SINK_PENALTY;
         } else {
+            // Normal flight: balance between lift and gravity
             const liftFromAirspeed = this.speed * this.config.LIFT_PER_SPEED_UNIT;
             const netVerticalForce = liftFromAirspeed - this.config.GRAVITY_BASE_PULL;
-            if (netVerticalForce < 0) {
-                heightChangeDueToPhysics = Math.max(netVerticalForce, -this.config.MINIMUM_SINK_RATE);
-            } else {
-                heightChangeDueToPhysics = netVerticalForce;
-            }
+            // Sink rate is either the net force or a minimum sink rate, whichever is less negative
+            heightChangeDueToPhysics = Math.max(netVerticalForce, -this.config.MINIMUM_SINK_RATE);
         }
         this.height += heightChangeDueToPhysics;
 
+        // If losing altitude, convert potential energy back to kinetic energy (speed)
         if (heightChangeDueToPhysics < 0) {
             this.speed = Math.min(this.speed + Math.abs(heightChangeDueToPhysics) * this.config.DIVE_TO_SPEED_FACTOR, this.config.MAX_SPEED);
         }
 
+        // Final check for ground collision (simple version)
+        if (this.height <= 0) {
+            this.height = 0;
+            this.speed = 0; // Crash
+        }
+
         this.verticalSpeed = this.height - this.previousHeight;
+
+        // Update current target marker in race mode
+        if (raceMarkers && raceMarkers.length > 0) {
+            const targetMarker = raceMarkers[this.currentTargetMarkerIndex];
+            const distanceToMarker = Math.hypot(this.worldX - targetMarker.worldX, this.worldY - targetMarker.worldY);
+            if (distanceToMarker < this.config.RACE_MARKER_RADIUS_WORLD) {
+                this.currentTargetMarkerIndex++;
+                if (this.currentTargetMarkerIndex >= raceMarkers.length) {
+                    this.currentTargetMarkerIndex = 0; // Loop for next lap
+                }
+            }
+        }
     }
 
     draw(ctx, isDogfightMode = false) {
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.rotate(this.heading * Math.PI / 180);
+        ctx.rotate(this.bankAngle * Math.PI / 180); // Rotate based on bank angle for visual tilt
+
+        // Draw main fuselage
         ctx.fillStyle = this.config.PASTEL_GLIDER_BODY;
-        ctx.fillRect(-15, -5, 30, 10); // Fuselage
+        ctx.beginPath();
+        ctx.moveTo(-15, 0);
+        ctx.lineTo(-10, -4);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(-10, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw tail fin
         ctx.fillStyle = this.config.PASTEL_GLIDER_WING;
-        ctx.fillRect(-10, -2, 20, 4); // Wings
+        ctx.beginPath();
+        ctx.moveTo(-15, 0);
+        ctx.lineTo(-20, -5);
+        ctx.lineTo(-18, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore(); // Restore to pre-banked state
+
+        // Rotate for heading separately so contrail is correct
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.heading * Math.PI / 180);
+
+        // Draw wings
+        ctx.fillStyle = this.config.PASTEL_GLIDER_WING;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-5, -12);
+        ctx.lineTo(5, -12);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-5, 12);
+        ctx.lineTo(5, 12);
+        ctx.closePath();
+        ctx.fill();
+
         ctx.restore();
 
         if (isDogfightMode) {
