@@ -24,7 +24,8 @@ const keys = {
     ArrowLeft: false,
     ArrowRight: false,
     Enter: false,
-    ' ': false
+    ' ': false,
+    'Escape': false
 };
 
 document.addEventListener('keydown', (e) => {
@@ -49,6 +50,29 @@ function handleTouch(event, isStart) {
         const x = (touch.clientX - rect.left) * scaleX;
         const y = (touch.clientY - rect.top) * scaleY;
 
+        // Handle menu interactions on touch start
+        if (isStart) {
+            if (gameStateManager.gameState === config.STATE_START_SCREEN) {
+                gameStateManager.setState(config.STATE_MODE_SELECT);
+                return; // Prevent other touch actions on this event
+            } else if (gameStateManager.gameState === config.STATE_MODE_SELECT) {
+                const optionHeight = 70;
+                const optionBaseY = config.SCREEN_HEIGHT / 2 - (4 / 2 * optionHeight);
+                for (let j = 0; j < 4; j++) {
+                    const optionY = optionBaseY + j * optionHeight;
+                    if (y >= optionY - optionHeight / 2 && y <= optionY + optionHeight / 2) {
+                        gameStateManager.selectedModeOption = j;
+                        if (gameStateManager.selectedModeOption === config.MODE_FREE_FLY) gameStateManager.startNewLevel();
+                        else if (gameStateManager.selectedModeOption === config.MODE_RACE) gameStateManager.startRace();
+                        else if (gameStateManager.selectedModeOption === config.MODE_DOGFIGHT) gameStateManager.startDogfight();
+                        else if (gameStateManager.selectedModeOption === config.MODE_DELIVERY) gameStateManager.startDelivery();
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Handle in-game touch controls
         for (const key in config.TOUCH_CONTROLS) {
             const button = config.TOUCH_CONTROLS[key];
             if (x >= button.x && x <= button.x + button.width &&
@@ -91,6 +115,19 @@ function handleInput() {
             }
             keys.Enter = false;
         }
+    }
+
+    // Handle global inputs like exiting
+    const isPlaying = [
+        config.STATE_PLAYING_FREE_FLY,
+        config.STATE_RACE_PLAYING,
+        config.STATE_DOGFIGHT_PLAYING,
+        config.STATE_DELIVERY_PLAYING
+    ].includes(gameStateManager.gameState);
+
+    if (isPlaying && keys.Escape) {
+        gameStateManager.setState(config.STATE_START_SCREEN);
+        keys.Escape = false; // Prevent re-triggering
     }
 }
 

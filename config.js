@@ -240,7 +240,8 @@ const config = {
         'down': { x: 150, y: 800, width: 80, height: 80, label: '▼', key: 'ArrowDown' },
         'left': { x: 50, y: 750, width: 80, height: 80, label: '◀', key: 'ArrowLeft' },
         'right': { x: 250, y: 750, width: 80, height: 80, label: '▶', key: 'ArrowRight' },
-        'fire': { x: 1050, y: 750, width: 100, height: 100, label: 'FIRE', key: ' ' }
+        'fire': { x: 1050, y: 750, width: 100, height: 100, label: 'FIRE', key: ' ' },
+        'exit': { x: 10, y: 10, width: 80, height: 40, label: 'EXIT', key: 'Escape' }
     },
 
     // --- Land Types ---
