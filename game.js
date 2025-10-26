@@ -279,6 +279,7 @@ function drawFreeFly() {
         thermal.draw(ctx, camX, camY);
     }
 
+    gameStateManager.player.drawTracer(ctx, camX, camY);
     gameStateManager.player.draw(ctx);
     drawHud(ctx, gameStateManager.player, gameStateManager.gameState);
     gameStateManager.minimap.draw(ctx, gameStateManager.player, gameStateManager.aiGliders, gameStateManager.raceCourseMarkers);
@@ -299,6 +300,7 @@ function drawRace() {
         ai.draw(ctx, camX, camY);
     }
 
+    gameStateManager.player.drawTracer(ctx, camX, camY);
     gameStateManager.player.draw(ctx);
     drawHud(ctx, gameStateManager.player, gameStateManager.gameState);
     gameStateManager.minimap.draw(ctx, gameStateManager.player, gameStateManager.aiGliders, gameStateManager.raceCourseMarkers);
@@ -318,6 +320,7 @@ function drawDogfight() {
         ai.draw(ctx, camX, camY, true);
     }
 
+    gameStateManager.player.drawTracer(ctx, camX, camY);
     gameStateManager.player.draw(ctx, true);
     const dogfightData = {
         round: gameStateManager.dogfightCurrentRound,
@@ -339,6 +342,7 @@ function drawDelivery() {
         checkpoint.draw(ctx, camX, camY, checkpoint === gameStateManager.deliveryActiveTarget);
     }
 
+    gameStateManager.player.drawTracer(ctx, camX, camY);
     gameStateManager.player.draw(ctx);
     const deliveryData = {
         level: gameStateManager.deliveryCurrentLevel,

@@ -17,6 +17,7 @@ class Player {
         this.maxHealth = this.config.PLAYER_MAX_HEALTH;
         this.shootCooldownTimer = 0;
         this.currentTargetMarkerIndex = 0;
+        this.tracerPoints = [];
     }
 
     update(keys, raceMarkers) {
@@ -85,6 +86,12 @@ class Player {
 
         this.verticalSpeed = this.height - this.previousHeight;
 
+        // Update tracer
+        this.tracerPoints.push({ x: this.worldX, y: this.worldY, height: this.height });
+        if (this.tracerPoints.length > this.config.CONTRAIL_LENGTH) {
+            this.tracerPoints.shift();
+        }
+
         // Update current target marker in race mode
         if (raceMarkers && raceMarkers.length > 0) {
             const targetMarker = raceMarkers[this.currentTargetMarkerIndex];
@@ -150,6 +157,27 @@ class Player {
         if (isDogfightMode) {
             this.drawHealthBar(ctx, this.x, this.y - 30);
         }
+    }
+
+    drawTracer(ctx, camX, camY) {
+        if (this.tracerPoints.length < 2) return;
+
+        ctx.beginPath();
+        let firstPoint = this.tracerPoints[0];
+        let screenX = firstPoint.x - camX;
+        let screenY = firstPoint.y - camY;
+        ctx.moveTo(screenX, screenY);
+
+        for (let i = 1; i < this.tracerPoints.length; i++) {
+            let point = this.tracerPoints[i];
+            screenX = point.x - camX;
+            screenY = point.y - camY;
+            ctx.lineTo(screenX, screenY);
+        }
+
+        ctx.strokeStyle = this.config.PASTEL_CONTRAIL_COLOR;
+        ctx.lineWidth = 2;
+        ctx.stroke();
     }
 
     applyLiftFromThermal(thermalLiftPower) {
