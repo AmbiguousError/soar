@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soar Chat</title>
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Load marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 3. Configure Tailwind for Inter font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    // Replicate the dark theme from the Tkinter app
+                    colors: {
+                        'brand-dark': '#222',
+                        'brand-semi-dark': '#333',
+                        'brand-input': '#444',
+                        'brand-button': '#555',
+                        'brand-user': '#88ddff',
+                        'brand-model': '#99ff99',
+                        'brand-error': '#ff8888',
+                    }
+                },
+            }
+        }
+    </script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the chat history scrollbar */
+        #chat-history::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-history::-webkit-scrollbar-track {
+            background: #222;
+        }
+        #chat-history::-webkit-scrollbar-thumb {
+            background-color: #555;
+            border-radius: 20px;
+        }
+        /* Ensure prose styles (for Markdown) don't override our text color */
+        .prose {
+            color: inherit;
+        }
+    </style>
+</head>
+<body class="bg-brand-dark text-white flex justify-center items-center h-screen">
+
+    <!-- Main Chat Container -->
+    <div class="flex flex-col h-full w-full max-w-3xl mx-auto p-4 rounded-lg shadow-xl">
+        
+        <!-- Header -->
+        <h1 class="text-3xl font-bold text-center mb-4">Soar</h1>
+
+        <!-- Chat History -->
+        <!-- This div replaces the Tkinter ScrolledText widget -->
+        <div id="chat-history" class="flex-grow bg-brand-semi-dark rounded-lg p-4 mb-4 overflow-y-auto">
+            <!-- Messages will be injected here by JavaScript -->
+        </div>
+
+        <!-- "Soar is thinking..." Label -->
+        <p id="thinking-label" class="text-gray-400 italic h-6"></p>
+
+        <!-- Input Form -->
+        <!-- This replaces the Tkinter input_frame, input_text, and send_button -->
+        <form id="message-form" class="flex items-start space-x-3">
+            <textarea id="message-input" 
+                      rows="3" 
+                      class="flex-grow bg-brand-input rounded-lg p-3 border-none outline-none focus:ring-2 focus:ring-blue-500 resize-none" 
+                      placeholder="Type your message... (Shift+Enter for newline)"></textarea>
+            
+            <button id="send-button" 
+                    type="submit" 
+                    class="bg-brand-button text-white font-bold rounded-lg px-6 py-3 h-full transition-colors hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                Send
+            </button>
+        </form>
+
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const chatHistoryEl = document.getElementById('chat-history');
+        const messageFormEl = document.getElementById('message-form');
+        const messageInputEl = document.getElementById('message-input');
+        const sendButtonEl = document.getElementById('send-button');
+        const thinkingLabelEl = document.getElementById('thinking-label');
+
+        // --- Gemini API Configuration ---
+        // As per instructions, the API key is an empty string.
+        // The runtime environment will provide the key.
+        const apiKey = ""; 
+        const modelName = "gemini-2.5-flash-preview-09-2025";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+        // This array will store the conversation history, replacing chat_session.history
+        let conversationHistory = [];
+
+        // --- Event Listeners ---
+
+        /**
+         * Handles the form submission (sending a message).
+         * This replaces the Tkinter send_message function.
+         */
+        messageFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            
+            const userInput = messageInputEl.value.trim();
+            if (!userInput) return; // Don't send empty messages
+
+            // 1. Disable UI
+            setUIEnabled(false);
+            thinkingLabelEl.textContent = "Soar is thinking...";
+
+            // 2. Display user message
+            displayMessage(userInput, 'user');
+            messageInputEl.value = ''; // Clear input
+
+            // 3. Add user message to history
+            conversationHistory.push({
+                role: "user",
+                parts: [{ text: userInput }]
+            });
+
+            // 4. Send to Gemini API
+            try {
+                const payload = {
+                    contents: conversationHistory,
+                    // Replicate generation config from the Python app
+                    generationConfig: {
+                        "temperature": 1,
+                        "top_p": 0.95,
+                        "top_k": 64,
+                        "max_output_tokens": 8192,
+                    }
+                };
+
+                // --- Exponential Backoff ---
+                let response;
+                let retries = 0;
+                const maxRetries = 5;
+                let delay = 1000;
+
+                while (retries < maxRetries) {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429) { // Too Many Requests
+                        retries++;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    } else if (response.ok) {
+                        break; // Success
+                    } else {
+                        throw new Error(`API Error: ${response.statusText}`);
+                    }
+                }
+
+                if (!response.ok) {
+                    throw new Error(`Failed to get response after ${maxRetries} retries.`);
+                }
+                
+                const result = await response.json();
+
+                if (result.candidates && result.candidates[0].content) {
+                    const modelResponse = result.candidates[0].content;
+                    
+                    // Add model response to history
+                    conversationHistory.push(modelResponse); 
+                    
+                    // Display model response
+                    displayMessage(modelResponse.parts[0].text, 'model');
+                } else {
+                    // Handle cases where the API returns a 200 but no valid content
+                    let errorMessage = "Error: Received no valid response from the API.";
+                    if (result.promptFeedback) {
+                        errorMessage += ` (Feedback: ${JSON.stringify(result.promptFeedback)})`;
+                    }
+                    displayMessage(errorMessage, 'error');
+                }
+
+            } catch (error) {
+                // This replaces the update_error function
+                console.error("API call failed:", error);
+                displayMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                // 5. Re-enable UI
+                // This replaces the cleanup in update_chat and update_error
+                setUIEnabled(true);
+                thinkingLabelEl.textContent = "";
+                messageInputEl.focus();
+            }
+        });
+
+        /**
+         * Listens for Enter key to send, and Shift+Enter for newline.
+         * This matches the behavior of the Tkinter <Return> binding.
+         */
+        messageInputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Prevent newline
+                messageFormEl.requestSubmit(); // Trigger form submit
+            }
+        });
+
+
+        // --- Helper Functions ---
+
+        /**
+         * Creates and appends a new message to the chat history.
+         * This replaces the chat_history.insert logic.
+         * @param {string} text - The message content.
+         * @param {'user' | 'model' | 'error'} role - The role of the sender.
+         */
+        function displayMessage(text, role) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'mb-4';
+
+            const header = document.createElement('div');
+            header.className = 'font-bold mb-1';
+
+            const content = document.createElement('div');
+            // Use 'prose' for model responses to style Markdown
+            content.className = `prose prose-invert max-w-none break-words`;
+
+            switch (role) {
+                case 'user':
+                    header.textContent = 'You';
+                    header.className += ' text-brand-user';
+                    content.textContent = text; // User input is plain text
+                    break;
+                case 'model':
+                    header.textContent = 'Soar';
+                    header.className += ' text-brand-model';
+                    // Render Markdown for model responses
+                    content.innerHTML = marked.parse(text); 
+                    break;
+                case 'error':
+                    header.textContent = 'Error';
+                    header.className += ' text-brand-error';
+                    content.textContent = text;
+                    break;
+            }
+
+            messageWrapper.appendChild(header);
+            messageWrapper.appendChild(content);
+            chatHistoryEl.appendChild(messageWrapper);
+
+            // Auto-scroll to the bottom (replaces chat_history.see(tk.END))
+            chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+        }
+
+        /**
+         * Enables or disables the input field and send button.
+         * @param {boolean} isEnabled - Whether to enable the UI.
+         */
+        function setUIEnabled(isEnabled) {
+            messageInputEl.disabled = !isEnabled;
+            sendButtonEl.disabled = !isEnabled;
+        }
+
+        // --- Initialization ---
+        // Display a welcome message
+        displayMessage("Hello! I'm Soar, running in your browser. How can I help you today?", 'model');
+        messageInputEl.focus();
+
+    </script>
+</body>
+</html>
