@@ -1,24 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Pastel Glider</title>
     <style>
-        body {
+        body, html {
             background-color: #000;
-            color: #fff;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Prevents scrollbars */
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
         }
         canvas {
-            border: 1px solid #fff;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="1200" height="900"></canvas>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="1200" height="900"></canvas>
+    </div>
     <script src="config.js"></script>
     <script src="sprites.js"></script>
     <script src="mapGeneration.js"></script>

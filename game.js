@@ -4,6 +4,20 @@ const ctx = canvas.getContext('2d');
 canvas.width = config.SCREEN_WIDTH;
 canvas.height = config.SCREEN_HEIGHT;
 
+let scaleX = 1;
+let scaleY = 1;
+
+function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    scaleX = canvas.width / rect.width;
+    scaleY = canvas.height / rect.height;
+}
+
+window.addEventListener('resize', resizeCanvas);
+// Call it initially to set the correct scale
+window.addEventListener('load', resizeCanvas);
+
+
 const keys = {
     ArrowUp: false,
     ArrowDown: false,
@@ -24,6 +38,31 @@ document.addEventListener('keyup', (e) => {
         keys[e.key] = false;
     }
 });
+
+function handleTouch(event, isStart) {
+    event.preventDefault();
+    const touches = event.changedTouches;
+    const rect = canvas.getBoundingClientRect();
+
+    for (let i = 0; i < touches.length; i++) {
+        const touch = touches[i];
+        const x = (touch.clientX - rect.left) * scaleX;
+        const y = (touch.clientY - rect.top) * scaleY;
+
+        for (const key in config.TOUCH_CONTROLS) {
+            const button = config.TOUCH_CONTROLS[key];
+            if (x >= button.x && x <= button.x + button.width &&
+                y >= button.y && y <= button.y + button.height) {
+                keys[button.key] = isStart;
+            }
+        }
+    }
+}
+
+canvas.addEventListener('touchstart', (e) => handleTouch(e, true), { passive: false });
+canvas.addEventListener('touchend', (e) => handleTouch(e, false), { passive: false });
+canvas.addEventListener('touchcancel', (e) => handleTouch(e, false), { passive: false });
+
 
 function handleInput() {
     if (gameStateManager.gameState === config.STATE_START_SCREEN) {
@@ -184,6 +223,9 @@ function draw() {
     } else if (gameStateManager.gameState === config.STATE_DELIVERY_PLAYING) {
         drawDelivery();
     }
+
+    // Always draw touch controls on top if enabled
+    drawTouchControls(ctx, keys);
 }
 
 function drawFreeFly() {

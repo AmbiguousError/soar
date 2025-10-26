@@ -230,6 +230,19 @@ const config = {
     PASTEL_RUNWAY_DESTINATION_COLOR: '#648264', // Greenish tint for destination
     PASTEL_RUNWAY_START_COLOR: '#826464', // Reddish tint for start
 
+    // --- Touch Controls ---
+    TOUCH_CONTROLS_ENABLED: true,
+    TOUCH_BUTTON_ALPHA: 0.5,
+    TOUCH_BUTTON_COLOR: '#c8c8d2',
+    TOUCH_BUTTON_PRESSED_COLOR: '#f5f5fa',
+    TOUCH_CONTROLS: {
+        'up': { x: 150, y: 700, width: 80, height: 80, label: '▲', key: 'ArrowUp' },
+        'down': { x: 150, y: 800, width: 80, height: 80, label: '▼', key: 'ArrowDown' },
+        'left': { x: 50, y: 750, width: 80, height: 80, label: '◀', key: 'ArrowLeft' },
+        'right': { x: 250, y: 750, width: 80, height: 80, label: '▶', key: 'ArrowRight' },
+        'fire': { x: 1050, y: 750, width: 100, height: 100, label: 'FIRE', key: ' ' }
+    },
+
     // --- Land Types ---
     LAND_TYPE_WATER_DEEP: 0, LAND_TYPE_WATER_SHALLOW: 1, LAND_TYPE_PLAINS: 2, LAND_TYPE_FOREST_TEMPERATE: 3, LAND_TYPE_MOUNTAIN_BASE: 4,
     LAND_TYPE_SAND_DESERT: 5, LAND_TYPE_MOUNTAIN_PEAK: 6, LAND_TYPE_RIVER: 7, LAND_TYPE_FOREST_DENSE: 8, LAND_TYPE_GRASSLAND: 9, LAND_TYPE_SAND_BEACH: 10,

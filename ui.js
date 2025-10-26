@@ -232,3 +232,26 @@ class Minimap {
         ctx.restore();
     }
 }
+
+function drawTouchControls(ctx, pressedKeys) {
+    if (!config.TOUCH_CONTROLS_ENABLED) return;
+
+    ctx.save();
+    ctx.globalAlpha = config.TOUCH_BUTTON_ALPHA;
+    ctx.font = '36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (const key in config.TOUCH_CONTROLS) {
+        const button = config.TOUCH_CONTROLS[key];
+        const isPressed = pressedKeys[button.key];
+
+        ctx.fillStyle = isPressed ? config.TOUCH_BUTTON_PRESSED_COLOR : config.TOUCH_BUTTON_COLOR;
+        ctx.fillRect(button.x, button.y, button.width, button.height);
+
+        ctx.fillStyle = config.PASTEL_BLACK;
+        ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
+    }
+
+    ctx.restore();
+}
